@@ -613,10 +613,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       ctx.beginPath(); ctx.moveTo(0, i * u); ctx.lineTo(s, i * u); ctx.stroke();
     }
   }
-  T.glass = () => tex('glass', 256, (c, s) => curtain(c, s, false));
-  T.glassNight = () => tex('glassN', 256, (c, s) => curtain(c, s, true), { srgb: true });
+  T.glass = () => tex('glass', 512, (c, s) => curtain(c, s, false));
+  T.glassNight = () => tex('glassN', 512, (c, s) => curtain(c, s, true), { srgb: true });
 
-  T.modern = () => tex('modern', 256, (ctx, s) => {
+  T.modern = () => tex('modern', 512, (ctx, s) => {
     ctx.fillStyle = '#c6c2b8'; ctx.fillRect(0, 0, s, s);
     const bands = 4, h = s / bands;
     for (let i = 0; i < bands; i++) {
@@ -1017,7 +1017,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       this.scene.add(this.hemi);
       this.sun = new THREE.DirectionalLight(0xfff2dc, 1.45);
       this.sun.castShadow = true;
-      this.sun.shadow.mapSize.set(1024, 1024);
+      this.sun.shadow.mapSize.set(2048, 2048);
       const sc = this.sun.shadow.camera;
       sc.left = -58; sc.right = 58; sc.top = 58; sc.bottom = -58; sc.near = 1; sc.far = 320;
       this.sun.shadow.bias = -0.0008;
@@ -1122,7 +1122,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const R2 = this.renderer;
       if (q === 'low') { R2.shadowMap.enabled = false; this.sun.shadow.mapSize.set(512, 512); this.setRenderScale(0.72); }
       else if (q === 'medium') { R2.shadowMap.enabled = true; this.sun.shadow.mapSize.set(1024, 1024); this.setRenderScale(0.85); }
-      else if (q === 'high') { R2.shadowMap.enabled = true; this.sun.shadow.mapSize.set(1536, 1536); this.setRenderScale(1); }
+      else if (q === 'high') { R2.shadowMap.enabled = true; this.sun.shadow.mapSize.set(2048, 2048); this.setRenderScale(1); }
       else { R2.shadowMap.enabled = true; this.sun.shadow.mapSize.set(2048, 2048); this.setRenderScale(1); }
       this.sun.shadow.map?.dispose();
       this.sun.shadow.map = null;
@@ -1670,11 +1670,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         case 'concrete': return new S({ map: TEX.concrete(), roughness: 0.86, vertexColors: true });
         case 'glass': return new S({
           map: TEX.glass(), emissiveMap: TEX.glassNight(), emissive: 0xfff0d0,
-          roughness: 0.24, metalness: 0.42, vertexColors: true, emissiveIntensity: 0, envMapIntensity: 1.3
+          roughness: 0.20, metalness: 0.46, vertexColors: true, emissiveIntensity: 0, envMapIntensity: 1.7
         });
         case 'modern': return new S({
           map: TEX.modern(), emissiveMap: TEX.glassNight(), emissive: 0xffe7bb,
-          roughness: 0.38, metalness: 0.30, vertexColors: true, emissiveIntensity: 0, envMapIntensity: 1.0
+          roughness: 0.34, metalness: 0.34, vertexColors: true, emissiveIntensity: 0, envMapIntensity: 1.25
         });
         case 'brick': return new S({ map: TEX.brick(), roughness: 0.9, vertexColors: true });
         case 'grass': return new S({ map: TEX.grass(), roughness: 1, vertexColors: true });
@@ -3837,16 +3837,21 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       for (const arm of [armL, armR]) {
         const sleeve = boxMesh(0.115, 0.26, 0.135, C.blouse);
         sleeve.position.y = -0.13;
+        const elbow = new THREE.Group();
+        elbow.position.y = -0.26;
         const fore = boxMesh(0.1, 0.24, 0.12, C.skin);
-        fore.position.y = -0.38;
+        fore.position.y = -0.12;
         const hand = boxMesh(0.11, 0.11, 0.13, C.skin);
-        hand.position.y = -0.53;
-        arm.add(sleeve, fore, hand);
+        hand.position.y = -0.27;
+        elbow.add(fore, hand);
+        arm.add(sleeve, elbow);
+        arm.userData.elbow = elbow;
         body.add(arm);
       }
       armL.position.set(-0.25, 1.4, 0);
       armR.position.set(0.25, 1.4, 0);
       this.armL = armL; this.armR = armR;
+      this.elbowL = armL.userData.elbow; this.elbowR = armR.userData.elbow;
 
       // —— 颈链
       const choker = boxMesh(0.19, 0.05, 0.19, C.choker);
@@ -4065,7 +4070,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const A = this.anim || (this.anim = {
         legL: 0, legR: 0, armL: 0, armR: 0, armLz: 0.1, armRz: -0.1,
         bodyY: 0, tiltX: 0, headX: 0, headY: 0, gait: 0, lean: 0, land: 0, air: 0, fallV: 0,
-        kneeL: 0.05, kneeR: 0.05
+        kneeL: 0.05, kneeR: 0.05, elbow: 0.16
       });
       const g0 = G;
 
@@ -4085,6 +4090,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const runW = A.gait > 1 ? Math.min(1, (A.gait - 1) / 0.28) : 0;
 
       let tLegL = 0, tLegR = 0, tKneeL = 0.05, tKneeR = 0.05, tArmL = 0, tArmR = 0, tArmLz = 0.1, tArmRz = -0.1;
+      let tElbow = 0.16;
       let tBodyY = 0, tTiltX = 0, tHeadX = 0, tHeadY = 0, tLeanZ = 0;
       let k = 12;
 
@@ -4095,6 +4101,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         tLegL = 0.55 - v * 0.25 + prep * 0.38;
         tLegR = -0.22 + v * 0.18 + prep * 0.14;
         tKneeL = 0.55 + prep * 0.5; tKneeR = 0.25 + prep * 0.35;
+        tElbow = 0.85 - prep * 0.45 + Math.max(0, -v) * 0.25;
         tArmL = -2.0 + v * 0.35 - prep * 0.45;
         tArmR = -2.0 + v * 0.35 - prep * 0.45;
         tArmLz = 0.5; tArmRz = -0.5;
@@ -4105,6 +4112,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         this.state = 'jump';
       } else if (this.sitting) {
         tLegL = -1.5; tLegR = -1.5; tKneeL = 1.5; tKneeR = 1.5;
+        tElbow = 0.6;
         tArmL = -0.35; tArmR = -0.35;
         tArmLz = 0.15; tArmRz = -0.15;
         tBodyY = -0.42;
@@ -4114,6 +4122,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         tLegL = -0.9 + Math.sin(ph * 2) * 0.22 * A.gait;
         tLegR = -0.9 - Math.sin(ph * 2) * 0.22 * A.gait;
         tKneeL = 1.35; tKneeR = 1.35;
+        tElbow = 0.95;
         tArmL = -0.4; tArmR = -0.4;
         tArmLz = 0.2; tArmRz = -0.2;
         tBodyY = -0.12;
@@ -4136,6 +4145,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         tArmR = s1 * (swing * 0.82 + 0.1 * runW);
         tArmLz = 0.1 + 0.1 * runW + Math.abs(s1) * 0.05 * gN;
         tArmRz = -tArmLz;
+        tElbow = 0.28 + 0.5 * runW + Math.abs(s1) * (0.22 + 0.3 * runW);
         // 起伏：跑步双频更"弹"
         tBodyY = Math.abs(s1) * 0.045 * gN - 0.014 * runW + Math.abs(c1) * 0.013 * runW;
         tTiltX = 0.115 * runW;
@@ -4165,6 +4175,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         tArmR += -0.5 * land;
         tArmLz += 0.24 * land;
         tArmRz -= 0.24 * land;
+        tElbow += 0.55 * land;
         tTiltX += 0.1 * land;
         k = Math.max(k, 17);
       }
@@ -4179,6 +4190,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       A.legR = g0.damp(A.legR, tLegR, k, dt);
       A.kneeL = g0.damp(A.kneeL || 0.05, tKneeL, k * 0.9, dt);
       A.kneeR = g0.damp(A.kneeR || 0.05, tKneeR, k * 0.9, dt);
+      A.elbow = g0.damp(A.elbow || 0.16, tElbow, k * 1.05, dt);
       A.armL = g0.damp(A.armL, tArmL, k, dt);
       A.armR = g0.damp(A.armR, tArmR, k, dt);
       A.armLz = g0.damp(A.armLz, tArmLz, k, dt);
@@ -4193,6 +4205,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       this.legR.rotation.x = A.legR;
       if (this.kneeL) this.kneeL.rotation.x = A.kneeL;
       if (this.kneeR) this.kneeR.rotation.x = A.kneeR;
+      if (this.elbowL) this.elbowL.rotation.x = -A.elbow;
+      if (this.elbowR) this.elbowR.rotation.x = -A.elbow;
       this.armL.rotation.x = A.armL;
       this.armR.rotation.x = A.armR;
       this.armL.rotation.z = A.armLz;
@@ -5101,12 +5115,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       // 短一点、亮一点的混响
       const conv = ctx.createConvolver();
       conv.buffer = this.makeIR(ctx, 1.7, 3.2);
-      const wet = ctx.createGain(); wet.gain.value = 0.32;
+      const wet = ctx.createGain(); wet.gain.value = 0.40;
       conv.connect(wet); wet.connect(this.bus);
       this.rev = conv;
 
       const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass'; lp.frequency.value = 5200; lp.Q.value = 0.2;
+      lp.type = 'lowpass'; lp.frequency.value = 6400; lp.Q.value = 0.16;
       lp.connect(this.bus);
       this.dry = lp;
 
@@ -5214,9 +5228,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     setMood(night) {
       if (!this.dry) return;
       const t = this.ctx.currentTime;
-      // 夜里只是稍微柔一点，不压暗
-      this.dry.frequency.setTargetAtTime(night > 0.5 ? 3800 : 5200, t, 2.0);
-      this.beat = night > 0.5 ? 0.48 : 0.44;
+      this.night = night > 0.5;
+      // 夜里柔一点但不闷：只压高频，保留空气感
+      this.dry.frequency.setTargetAtTime(this.night ? 4200 : 6400, t, 2.0);
+      this.beat = this.night ? 0.50 : 0.44;
+      if (this.rev) this.rev.gain && (this.rev.gain.value = this.night ? 0.5 : 0.4);
     },
     schedule() {
       if (!this.playing) return;
@@ -5240,6 +5256,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (note) {
           this.bell(note, t + 0.005, 1.15, 0.17);
           this.bell(note * 2, t + 0.01, 0.7, 0.035);   // 高八度泛音，提亮
+          // 强拍加一层低三度和声，旋律更厚
+          if (inBar % 4 === 0) this.bell(note * 0.84, t + 0.028, 1.0, 0.055);
+        }
+        // 夜里加一串稀疏的高音琶音，像远处的灯
+        if (this.night && inBar % 2 === 1) {
+          const oct = ch.pad[0] * 4;
+          this.bell(oct * (inBar % 4 === 1 ? 1 : 1.5), t + 0.06, 0.8, 0.028);
         }
         if (inBar === 2 || inBar === 6) this.clap(t, 0.02);
         // 轻沙锤（后半拍）
@@ -5359,6 +5382,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       // 雨天天色压暗
       G.rainFactor = this.rain;
+      // 下雨时地面变湿：粗糙度降下去，反光出来（每 0.4 秒调一次就够）
+      this._wetT = (this._wetT || 0) + dt;
+      if (this._wetT > 0.4 && G.W && G.W.materials) {
+        this._wetT = 0;
+        const m = G.W.materials, r = this.rain;
+        if (m.asphalt) m.asphalt.roughness = 0.94 - 0.55 * r;
+        if (m.paving) m.paving.roughness = 0.82 - 0.42 * r;
+        if (m.concrete) m.concrete.roughness = 0.86 - 0.34 * r;
+        if (m.asphalt) m.asphalt.metalness = 0.02 + 0.12 * r;
+      }
       if (G.R.scene.fog) {
         G.R.scene.fog.far = G.lerp(G.R.scene.fog.far, 160, this.rain * 0.02);
         G.R.scene.fog.color.lerp(new THREE.Color(0x6a7480), this.rain * 0.01);
@@ -7212,7 +7245,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 247;
+  G.BUILD = 248;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
