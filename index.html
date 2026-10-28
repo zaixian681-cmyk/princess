@@ -190,6 +190,13 @@ button{font-family:inherit;color:#fff;border:none;background:none;cursor:pointer
 .modal-card{width:min(460px,92%);max-height:100%;overflow-y:auto;background:linear-gradient(180deg,#232b38,#161b24);border:1px solid rgba(255,157,196,.3);border-radius:18px;padding:20px;box-shadow:0 24px 60px rgba(0,0,0,.6);}
 .modal-card h3{margin:0 0 10px;font-size:15px;letter-spacing:2px;color:var(--pink);}
 .modal-card p{margin:0 0 16px;font-size:13.5px;line-height:1.85;color:#e6eef6;white-space:pre-wrap;}
+.story-card{width:min(520px,94%);max-height:100%;overflow-y:auto;}
+.story-card ul{list-style:none;margin:0 0 12px;padding:0;}
+.story-card li{font-size:12.5px;line-height:1.7;color:#f2e6ef;padding:5px 8px;margin-bottom:3px;
+  border-left:2px solid rgba(255,157,196,.55);background:rgba(255,157,196,.07);border-radius:6px;
+  opacity:0;transform:translateX(-8px);transition:opacity .55s ease,transform .55s ease;}
+.story-card li.in{opacity:1;transform:translateX(0);}
+#storyEnd{font-size:12px;color:#ffd6e6;letter-spacing:1px;margin:10px 0 14px;}
 .ending-card{width:min(560px,92%);max-height:100%;overflow-y:auto;text-align:center;background:radial-gradient(120% 120% at 50% 0%,#2a1f33,#12161f 70%);border:1px solid rgba(255,157,196,.35);border-radius:22px;padding:26px 24px;box-shadow:0 30px 80px rgba(0,0,0,.7);}
 .ending-card .stars{color:#ffd166;font-size:20px;letter-spacing:6px;margin-bottom:8px;animation:twinkle 3s infinite;}
 .ending-card h2{font-size:clamp(16px,2.2vw,21px);line-height:1.85;margin:0 0 10px;letter-spacing:2px;
@@ -431,6 +438,16 @@ window.addEventListener('error', function(e){
   <div class="album-card">
     <div class="panel-head"><span>我们的相册</span><button class="close" id="albumClose">✕</button></div>
     <div id="albumGrid" class="album-grid"></div>
+  </div>
+</div>
+
+<!-- ============ 我们的故事（集齐 11 处惊喜的结局） ============ -->
+<div id="storyModal" class="modal hidden">
+  <div class="modal-card story-card">
+    <h3>我们的故事</h3>
+    <ul id="storyList"></ul>
+    <p id="storyEnd"></p>
+    <button class="btn small" id="storyClose">收进相册</button>
   </div>
 </div>
 
@@ -3621,6 +3638,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
     /* ---------- 视角 ---------- */
     handleLook(dt) {
+      if (G.cinematic) { IN.consumeLook(); return; }
       const l = IN.consumeLook();
       const s = this.lookSens;
       this.camYaw -= l.x * s;
@@ -3661,7 +3679,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       // 输入
       let ix = IN.axis.x, iz = IN.axis.y;
-      if (IN.key('KeyW', 'ArrowUp')) iz = 1;
+      if (G.cinematic) { ix = 0; iz = 0; }
+      if (IN.key('KeyW', 'ArrowUp')) iz = G.cinematic ? 0 : 1;
       if (IN.key('KeyS', 'ArrowDown')) iz = -1;
       if (IN.key('KeyA', 'ArrowLeft')) ix = -1;
       if (IN.key('KeyD', 'ArrowRight')) ix = 1;
@@ -5842,6 +5861,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       $('noteClose').addEventListener('click', () => { $('noteModal').classList.add('hidden'); G.paused = false; });
       $('endingClose').addEventListener('click', () => { $('ending').classList.add('hidden'); G.paused = false; });
       $('photoClose').addEventListener('click', () => { $('photoModal').classList.add('hidden'); G.paused = false; });
+      const storyBtn = $('storyClose');
+      if (storyBtn) storyBtn.addEventListener('click', () => {
+        $('storyModal').classList.add('hidden'); G.paused = false;
+        if (G.Moments && G.Moments._hourBackup !== undefined && G.Time) G.Time.hour = G.Moments._hourBackup;
+      });
       // 点背景也能关掉（横屏时按钮偶尔会被挤到视野外，给一个兜底出口）
       const backdropClose = (id) => {
         const el = $(id);
@@ -5850,7 +5874,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           if (e.target === el) { el.classList.add('hidden'); G.paused = false; }
         });
       };
-      backdropClose('photoModal'); backdropClose('noteModal'); backdropClose('ending');
+      backdropClose('photoModal'); backdropClose('noteModal'); backdropClose('ending'); backdropClose('storyModal');
       $('albumClose').addEventListener('click', () => { $('albumModal').classList.add('hidden'); G.paused = false; });
       $('albumModal').addEventListener('click', (e) => { if (e.target.id === 'albumModal') { $('albumModal').classList.add('hidden'); G.paused = false; } });
       $('btnAbout').addEventListener('click', () => { $('about').classList.remove('hidden'); });
@@ -6182,6 +6206,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const key = o.key;
       const first = !this.found[key];
       this.found[key] = 1;
+      if (first) (this.order || (this.order = [])).push(key);
       this.build_(key, o);
       const n = Object.keys(this.found).length;
       if (G.Quests) G.Quests.flags['moment_' + key] = 1;
@@ -6200,7 +6225,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (n >= this.total && !this.found.__finale) {
         this.found.__finale = 1;
         this.fireworks(o.x, o.y + 8, o.z, 7);
-        G.UI && G.UI.hint('六个惊喜都找到了 · 滨江观景台在等你们', 4200);
+        G.UI && G.UI.hint('十一处惊喜都找到了 · 去滨江观景台，剩下的故事在那里等你们', 4600);
       }
     },
 
@@ -6473,9 +6498,85 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       add('flower', bcx(2) - 9, bcz(0) + 3, 0, SPOTS.flower);
     },
 
+    /* ---------- 结局：烟花 + 我们的故事 ---------- */
+    finale() {
+      if (this.finaleStarted) return;
+      this.finaleStarted = true;
+      const P = G.Player, deck = G.W.viewDeck;
+      const x = deck ? deck.x : P.pos.x, z = deck ? deck.z : P.pos.z;
+      // 天色压暗到夜晚，方便看烟花
+      if (G.Time) { this._hourBackup = G.Time.hour; G.Time.hour = 20.4; G.Time.speed = 0.15; G.nightFactor = 1; }
+      // 镜头慢慢摇起来
+      G.cinematic = 1;
+      this.cinT = 0;
+      // 三轮烟花，从城市上空往观景台方向铺
+      this.fireworks(x - 16, 20, z - 18, 5);
+      this.seq.push({ t: 1.6, fn: () => this.fireworks(x, 26, z, 6) });
+      this.seq.push({ t: 3.4, fn: () => this.fireworks(x + 14, 22, z + 12, 5) });
+      // 爱心雨，从四周往上飘
+      for (let i = 0; i < 14; i++) {
+        this.seq.push({
+          t: i * 0.55,
+          fn: () => {
+            const pp = G.Player && G.Player.pos;
+            if (!pp) return;
+            this.hearts.emit(pp.x + (Math.random() - 0.5) * 7, pp.y + 2.2, pp.z + (Math.random() - 0.5) * 7, 12,
+              { up: 1.0, spread: 2.4, r: 1.8, color: 0xff9dc4, life: 2.8 });
+          }
+        });
+      }
+      G.Audio && G.Audio.sfx('chime');
+      G.UI && G.UI.hint('抬头看 —— 这一整座城市，都在替你说话。', 4200);
+      // 8 秒后收镜头、弹「我们的故事」
+      this.seq.push({ t: 8.2, fn: () => { G.cinematic = 0; this.story(); } });
+    },
+
+    story() {
+      const UI = G.UI;
+      const list = document.getElementById('storyList');
+      const end = document.getElementById('storyEnd');
+      if (!list) return;
+      list.innerHTML = '';
+      const keys = (this.order || []).filter(k => M.SPOTS[k]);
+      keys.forEach((k, i) => {
+        const li = document.createElement('li');
+        li.textContent = (i + 1) + '　' + (M.SPOTS[k].title || M.SPOTS[k].label);
+        list.appendChild(li);
+        setTimeout(() => li.classList.add('in'), 220 * i + 120);
+      });
+      if (end) {
+        end.textContent = '十一个地方，十一句没说完的话。剩下的，我们慢慢讲。';
+        end.style.opacity = 0;
+        setTimeout(() => { end.style.transition = 'opacity .6s'; end.style.opacity = 1; }, 220 * keys.length + 300);
+      }
+      const modal = document.getElementById('storyModal');
+      if (modal) { modal.classList.remove('hidden'); G.paused = true; }
+      G.Audio && G.Audio.sfx('chime');
+      if (G.Quests) G.Quests.flags.storySeen = 1;
+    },
+
     /* ---------- 每帧 ---------- */
     update(dt) {
       if (!this.ready) return;
+      // 结局镜头：自动慢慢摇、拉远、微微抬头
+      if (G.cinematic) {
+        this.cinT = (this.cinT || 0) + dt;
+        const P = G.Player;
+        if (P) {
+          P.camYaw += dt * 0.22;
+          P.camPitch = G.damp(P.camPitch, -0.26, 1.6, dt);
+          P.camDistWanted = G.damp(P.camDistWanted || 6, 15, 1.0, dt);
+          P.vel && (P.vel.x = P.vel.z = 0);
+        }
+      } else if (!this.finaleStarted && G.Player && G.W.viewDeck) {
+        // 集齐十一处、走到观景台就自动进入结局
+        const n = Object.keys(this.found).filter(k => k !== '__finale').length;
+        if (n >= this.total) {
+          const d = G.W.viewDeck;
+          const dx = G.Player.pos.x - d.x, dz = G.Player.pos.z - d.z;
+          if (dx * dx + dz * dz < 130) this.finale();
+        }
+      }
       this.hearts.update(dt);
       this.sparks.update(dt);
       // 星星淡入淡出
@@ -6590,7 +6691,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 223;
+  G.BUILD = 224;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
