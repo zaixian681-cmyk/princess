@@ -6300,6 +6300,38 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         ctx.fillStyle = '#8fd3ff';
         for (const car of G.Vehicles.ai) ctx.fillRect(toX(car.x) - dotR / 2, toZ(car.z) - dotR / 2, dotR, dotR);
       }
+      // 主线目标：地图上打一个会呼吸的粉色圈
+      const tg = G.Story && G.Story.target ? G.Story.target() : null;
+      if (tg) {
+        let tx = toX(tg.x), tz = toZ(tg.z);
+        const pad = mini ? 6 : 10;
+        const clamped = tx < pad || tx > size - pad || tz < pad || tz > size - pad;
+        tx = Math.max(pad, Math.min(size - pad, tx));
+        tz = Math.max(pad, Math.min(size - pad, tz));
+        const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 340);
+        ctx.strokeStyle = 'rgba(255,157,196,' + (0.45 + pulse * 0.5).toFixed(2) + ')';
+        ctx.lineWidth = mini ? 1.6 : 2.4;
+        ctx.beginPath(); ctx.arc(tx, tz, (mini ? 5 : 10) + pulse * (mini ? 3.5 : 7), 0, 6.3); ctx.stroke();
+        ctx.fillStyle = '#ffd166';
+        ctx.beginPath(); ctx.arc(tx, tz, mini ? 2.6 : 4.2, 0, 6.3); ctx.fill();
+        if (!mini) {
+          ctx.fillStyle = '#ffe9f2';
+          ctx.font = '600 12px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(tg.label || '目标', tx, tz - 15);
+        }
+        if (clamped && mini) {
+          // 目标在小地图外：画一个小三角指方向
+          const P0 = G.Player;
+          if (P0) {
+            const ang = Math.atan2(tg.z - P0.pos.z, tg.x - P0.pos.x);
+            ctx.save(); ctx.translate(tx, tz); ctx.rotate(ang);
+            ctx.fillStyle = '#ff9dc4';
+            ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(-3, 3); ctx.lineTo(-3, -3); ctx.closePath(); ctx.fill();
+            ctx.restore();
+          }
+        }
+      }
       const P = G.Player;
       if (P) {
         const px = toX(P.pos.x), pz = toZ(P.pos.z);
@@ -6339,7 +6371,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         id: 'key', goal: '去公寓门口找到那把黄铜钥匙',
         hint: '梧桐公寓在城西，门口台阶旁边有个小东西在发光',
         check() { return G.Inv && G.Inv.count('key') > 0; },
-        done: '拿到钥匙了 · 公寓在城西，进去看看二楼'
+        done: '拿到钥匙了 · 公寓在城西，进去看看二楼',
+        at() { const a = G.W.enterables && G.W.enterables.apartment; return a ? { x: (a.x0 + a.x1) / 2, z: a.z1 + 4, label: '梧桐公寓' } : null; }
       },
       {
         id: 'home', goal: '上梧桐公寓二楼，看看窗边留下的字条',
@@ -6348,13 +6381,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           const a = G.W.enterables && G.W.enterables.apartment, P = G.Player;
           return !!(a && P && P.pos.y > 3.2 && P.pos.x > a.x0 && P.pos.x < a.x1 && P.pos.z > a.z0 && P.pos.z < a.z1);
         },
-        done: '二楼看到的整座城市，比想象中温柔'
+        done: '二楼看到的整座城市，比想象中温柔',
+        at() { const a = G.W.enterables && G.W.enterables.apartment; return a ? { x: (a.x0 + a.x1) / 2, z: (a.z0 + a.z1) / 2, label: '公寓二楼' } : null; }
       },
       {
         id: 'coffee', goal: '去暖阳咖啡馆，替两个人点一杯热可可',
         hint: '咖啡馆在城北商业街，靠窗那张桌子上摆着两杯',
         check() { return G.Inv && G.Inv.count('coffee') > 0; },
-        done: '热可可拿到手了 · 她说过喜欢不太甜的'
+        done: '热可可拿到手了 · 她说过喜欢不太甜的',
+        at() { const c = G.W.enterables && G.W.enterables.cafe; return c ? { x: (c.x0 + c.x1) / 2, z: (c.z0 + c.z1) / 2, label: '暖阳咖啡馆' } : null; }
       },
       {
         id: 'office', goal: '上云顶大厦二层，看看那面玻璃墙外的城市',
@@ -6363,7 +6398,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           const o = G.W.enterables && G.W.enterables.office, P = G.Player;
           return !!(o && P && P.pos.y > 4.2 && P.pos.x > o.x0 && P.pos.x < o.x1 && P.pos.z > o.z0 && P.pos.z < o.z1);
         },
-        done: '站在二楼往下看，城市真的在替人说话'
+        done: '站在二楼往下看，城市真的在替人说话',
+        at() { const o = G.W.enterables && G.W.enterables.office; return o ? { x: (o.x0 + o.x1) / 2, z: (o.z0 + o.z1) / 2, label: '云顶大厦' } : null; }
       },
       {
         id: 'sunset', goal: '傍晚去滨江步道，等一场日落',
@@ -6372,7 +6408,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           const d = G.W.viewDeck, P = G.Player, h = G.Time ? G.Time.hour : 12;
           return !!(d && P && h >= 17 && Math.hypot(P.pos.x - d.x, P.pos.z - d.z) < 90);
         },
-        done: '日落看到了 · 天暗下来以后，观景台还有一件事'
+        done: '日落看到了 · 天暗下来以后，观景台还有一件事',
+        at() { const d = G.W.viewDeck; return d ? { x: d.x, z: d.z, label: '滨江观景台' } : null; }
       },
       {
         id: 'story', goal: '夜里去滨江观景台，把这一天讲完',
@@ -6380,7 +6417,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         check() {
           return !!(G.Moments && G.Moments.finaleStarted);
         },
-        done: '这一天过完了'
+        done: '这一天过完了',
+        at() { const d = G.W.viewDeck; return d ? { x: d.x, z: d.z, label: '滨江观景台' } : null; }
       }
     ],
 
@@ -6389,9 +6427,32 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         this.stage = G.Save.data.story.stage || 0;
       }
       this.updateHud();
+      this.initBeacon();
     },
 
     cur() { return this.steps[Math.min(this.stage, this.steps.length - 1)]; },
+
+    /* 当前阶段的目标点（给小地图 / 光柱用） */
+    target() {
+      if (this.stage >= this.steps.length) return null;
+      const st = this.cur();
+      try { return st && st.at ? st.at() : null; } catch (e) { return null; }
+    },
+
+    /* 世界里的目标光柱：远处也能看见往哪走 */
+    initBeacon() {
+      const T = global.THREE;
+      if (!T || !G.R || !G.R.scene) return;
+      const geo = new T.CylinderGeometry(0.9, 1.6, 30, 12, 1, true);
+      const mat = new T.MeshBasicMaterial({
+        color: 0xff9dc4, transparent: true, opacity: 0.16,
+        side: T.DoubleSide, depthWrite: false, fog: false
+      });
+      this.beacon = new T.Mesh(geo, mat);
+      this.beacon.visible = false;
+      this.beacon.frustumCulled = false;
+      G.R.scene.add(this.beacon);
+    },
 
     update(dt) {
       this.t += dt;
@@ -6399,6 +6460,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       this.t = 0;
       const st = this.cur();
       if (!st || this.stage >= this.steps.length) return;
+      // 目标光柱：立在当前目标点上方，轻轻呼吸
+      if (!this.beacon) this.initBeacon();
+      const tg = this.target();
+      if (this.beacon) {
+        if (tg) {
+          this.beacon.visible = true;
+          this.beacon.position.set(tg.x, 15, tg.z);
+          this.beacon.material.opacity = 0.10 + 0.07 * (0.5 + 0.5 * Math.sin(Date.now() / 420));
+        } else this.beacon.visible = false;
+      }
       let ok = false;
       try { ok = !!st.check(); } catch (e) { ok = false; }
       if (!ok) return;
@@ -6419,7 +6490,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (!el) return;
       if (this.stage >= this.steps.length) { el.textContent = '主线 已完成'; return; }
       const st = this.cur();
-      el.textContent = '主线 ' + (this.stage + 1) + '/5 · ' + st.goal;
+      let dist = '';
+      try {
+        const tg = this.target();
+        if (tg && G.Player) {
+          const d = Math.hypot(G.Player.pos.x - tg.x, G.Player.pos.z - tg.z);
+          dist = ' · ' + (d > 999 ? (d / 1000).toFixed(1) + 'km' : Math.round(d) + 'm');
+        }
+      } catch (e) {}
+      el.textContent = '主线 ' + (this.stage + 1) + '/5 · ' + st.goal + dist;
     }
   };
 })(window);
@@ -7088,7 +7167,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 242;
+  G.BUILD = 243;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
