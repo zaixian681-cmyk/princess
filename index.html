@@ -580,14 +580,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     const n = 4, u = s / n;
     for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
       const px = x * u + 3, py = y * u + 3, w = u - 6, h = u - 6;
-      const lit = night && Math.random() < 0.42;
+      // 夜里以 2×2 个窗格为一个"房间"，整间一起亮/一起暗，避免棋盘格
+      const lit = night && (Math.floor(x / 2) + Math.floor(y / 2) * 2) % 3 === 0;
       if (night) {
         if (lit) {
           const warm = Math.random();
-          const c = warm > .6 ? '#ffd9a0' : warm > .3 ? '#ffe9c8' : '#a9d8ff';
-          ctx.fillStyle = c; ctx.globalAlpha = 0.55 + Math.random() * 0.45;
+          const c = warm > .55 ? '#ffcf8c' : warm > .22 ? '#ffe4bb' : '#b7d8f5';
+          ctx.fillStyle = c; ctx.globalAlpha = 0.42 + Math.random() * 0.22;
           ctx.fillRect(px, py, w, h); ctx.globalAlpha = 1;
-        } else { ctx.fillStyle = '#0a0f16'; ctx.fillRect(px, py, w, h); }
+          // 亮着的屋子里有一点点家具剪影，看着更像有人住
+          if ((x + y) % 2 === 0) { ctx.fillStyle = 'rgba(60,42,28,.22)'; ctx.fillRect(px, py + h * 0.62, w, h * 0.3); }
+        } else { ctx.fillStyle = '#0b1119'; ctx.fillRect(px, py, w, h); }
       } else {
         const g = ctx.createLinearGradient(px, py, px + w, py + h);
         const b = 96 + Math.random() * 40;
@@ -2101,6 +2104,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       MB.box(style, cx, 4.2 + bodyH / 2, cz, w, bodyH, d, tint, uvRep);
       // 首层：真实墙体 + 门洞 + 室内（可自由进入）
       this.buildGroundFloor(cx, cz, w, d, style, zone, face, h);
+      // 转角壁柱（让硬直角有高光和厚度）
+      const pilC = ((Math.min(255, ((tint >> 16) & 255) * 1.1) | 0) << 16) |
+                   ((Math.min(255, ((tint >> 8) & 255) * 1.1) | 0) << 8) |
+                   Math.min(255, (tint & 255) * 1.1);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        MB.box(style, cx + sx * (w / 2 - 0.08), 4.2 + bodyH / 2, cz + sz * (d / 2 - 0.08),
+          0.52, bodyH, 0.52, pilC | 0, uvRep);
+      }
+      // 顶部压顶带，楼体与屋顶之间有过渡
+      MB.box('concrete', cx, h - 0.14, cz, w + 0.22, 0.22, d + 0.22, 0xe4e0d6, 4);
       // 屋顶
       MB.box('concrete', cx, h + 0.42, cz, w + 0.7, 0.84, d + 0.7, 0xcfccc4, 6);
       MB.box('concrete', cx, h + 1.35, cz, w + 0.5, 1.0, 0.3, 0xc9c6be, 3);
@@ -2603,10 +2616,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
         // 铺装缝线（横竖两条方向），把大片浅灰切成一块块石板
         for (let x = r.x0 + 4.5; x < r.x1 - 2; x += 4.5) {
-          MB.box('paving', x, y + 0.001, cz, 0.07, 0.008, BLOCK - 1.6, 0xb0ada4, 2);
+          MB.box('paving', x, y + 0.001, cz, 0.042, 0.007, BLOCK - 1.6, 0x9c998f, 2);
         }
         for (let z = r.z0 + 4.5; z < r.z1 - 2; z += 4.5) {
-          MB.box('paving', cx, y, z, BLOCK - 1.6, 0.008, 0.07, 0xb0ada4, 2);
+          MB.box('paving', cx, y, z, BLOCK - 1.6, 0.007, 0.042, 0x9c998f, 2);
         }
         // 深浅色块（像修补过的铺装），让地面不那么平
         for (let i = 0; i < 6; i++) {
@@ -2627,6 +2640,31 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             for (let k = -1; k <= 1; k++) {
               MB.box('dark', ex + (horiz ? k * 0.26 : 0), y + 0.014, ez + (horiz ? 0 : k * 0.26),
                 horiz ? 0.1 : 0.2, 0.008, horiz ? 0.2 : 0.1, 0x22262b, 1);
+            }
+          }
+        }
+        // 中央广场：地面圆形拼花 + 四组花坛
+        if (zone === 'plaza') {
+          const ringC = [0xb9ab90, 0xd9d2c0, 0xa89c86];
+          for (let ring = 0; ring < 3; ring++) {
+            const rad = 4.2 + ring * 2.1, segs = 14 + ring * 6;
+            for (let i = 0; i < segs; i++) {
+              const a1 = i / segs * Math.PI * 2, a2 = (i + 1) / segs * Math.PI * 2;
+              const mx = cx + Math.cos((a1 + a2) / 2) * rad, mz = cz + Math.sin((a1 + a2) / 2) * rad;
+              const len = 2 * rad * Math.sin((a2 - a1) / 2) + 0.06;
+              MB.box('paving', mx, y + 0.004, mz, len, 0.006, 0.42, ringC[ring], 2, -(a1 + a2) / 2);
+            }
+          }
+          MB.box('paving', cx, y + 0.005, cz, 3.6, 0.006, 3.6, 0xcfc4ad, 2);
+          for (let k = 0; k < 4; k++) {
+            const a = k * Math.PI / 2 + Math.PI / 4;
+            const px = cx + Math.cos(a) * 9.5, pz = cz + Math.sin(a) * 9.5;
+            MB.box('concrete', px, y + 0.22, pz, 2.4, 0.46, 2.4, 0xded8cb, 3);
+            MB.box('leaf', px, y + 0.58, pz, 2.05, 0.3, 2.05, 0x4f7a3a, 2);
+            for (let f = 0; f < 5; f++) {
+              const fa = f / 5 * Math.PI * 2;
+              MB.box('leaf', px + Math.cos(fa) * 0.62, y + 0.78, pz + Math.sin(fa) * 0.62,
+                0.42, 0.4, 0.42, [0xff6f91, 0xffd166, 0xc792ff, 0xf2f2ec][f % 4], 1);
             }
           }
         }
@@ -2810,8 +2848,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     updateNight(night) {
       const m = this.materials;
       if (!m) return;
-      if (m['glass']) m['glass'].emissiveIntensity = night * 1.35;
-      if (m['modern']) m['modern'].emissiveIntensity = night * 0.55;
+      if (m['glass']) {
+        m['glass'].emissiveIntensity = night * 0.62;
+        m['glass'].emissive = new THREE.Color(0xffdca8);   // 暖黄灯，不要冷白
+      }
+      if (m['modern']) {
+        m['modern'].emissiveIntensity = night * 0.34;
+        m['modern'].emissive = new THREE.Color(0xffd6a0);
+      }
       if (m['lamp']) m['lamp'].emissiveIntensity = 0.15 + night * 1.6;
       if (m['redlight']) m['redlight'].emissiveIntensity = night > 0.25 ? 1.8 : 0.15;
       if (m['greenlight']) m['greenlight'].emissiveIntensity = night > 0.25 ? 2.2 : 0.4;
@@ -6797,7 +6841,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 228;
+  G.BUILD = 229;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
