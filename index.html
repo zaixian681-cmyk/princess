@@ -7053,7 +7053,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 237;
+  G.BUILD = 239;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
@@ -7081,13 +7081,26 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       // 室内跟随补光（进入任意建筑时点亮）
       this.indoorLight = new THREE.PointLight(0xffe8c8, 0, 22, 2);
       this.indoorHemi = G.R.indoorHemi = new THREE.HemisphereLight(0xfff2e0, 0x9a8b80, 0);
-      this.indoorHemi.visible = false;
+      this.indoorHemi.visible = true;   // 常驻可见，只调强度：一旦 visible 变化，three.js 会重编译所有材质
       G.R.scene.add(this.indoorLight, this.indoorHemi);
       this.buildClouds();
+      // 预建环境声层（风/水/雨），避免第一次切换时分配音频节点造成卡顿
+      try { if (G.Audio && G.Audio.ready) G.Audio.setLayers({ indoor: false, rain: 0, river: false, night: 0 }); } catch (e) {}
 
       // 反射环境贴图
       this.buildEnv();
       G.R.renderer.compile(G.R.scene, G.R.camera);
+      // 预热：先把"进屋"时的灯光状态渲染一帧，避免第一次进室内出现一次性开销
+      try {
+        const hi = this.indoorHemi || G.R.indoorHemi;
+        const oldH = hi ? hi.intensity : 0;
+        const oldP = this.indoorLight ? this.indoorLight.intensity : 0;
+        if (hi) hi.intensity = 0.92;
+        if (this.indoorLight) this.indoorLight.intensity = 7.2;
+        G.R.renderer.render(G.R.scene, G.R.camera);
+        if (hi) hi.intensity = oldH;
+        if (this.indoorLight) this.indoorLight.intensity = oldP;
+      } catch (e) {}
 
       document.getElementById('loading').textContent = '城市已就绪 · 点击开始';
       this.bindTitle();
@@ -7465,7 +7478,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (R.indoorHemi) {
         R.indoorHemi.intensity = G.damp(R.indoorHemi.intensity, inB ? 0.92 : 0, 3.2, dt);
         R.indoorHemi.position.set(P.pos.x, P.pos.y + 1.2, P.pos.z);
-        R.indoorHemi.visible = R.indoorHemi.intensity > 0.01;
       }
       // 浪漫粒子 / 惊喜动画
       if (G.Moments) G.Moments.update(dt);
