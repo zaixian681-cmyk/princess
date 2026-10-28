@@ -42,7 +42,7 @@ button{font-family:inherit;color:#fff;border:none;background:none;cursor:pointer
 
 /* ---------- 通用画面 ---------- */
 .screen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:60;}
-#rotate{position:fixed;left:50%;transform:translateX(-50%);top:calc(6px + var(--safe-t));z-index:120;
+#rotate{position:fixed;left:50%;transform:translateX(-50%);top:calc(6px + var(--safe-t));z-index:70;
   display:none;align-items:center;gap:10px;padding:7px 12px;border-radius:14px;
   background:rgba(16,20,28,.88);border:1px solid rgba(255,157,196,.35);
   box-shadow:0 8px 24px rgba(0,0,0,.45);pointer-events:auto;}
@@ -178,11 +178,12 @@ button{font-family:inherit;color:#fff;border:none;background:none;cursor:pointer
 #mapPanel canvas#bigmap{width:100%;max-height:58%;object-fit:contain;border-radius:12px;background:#0d1219;flex:1 1 auto;min-height:0;}
 .map-legend{font-size:11px;opacity:.65;margin-top:6px;text-align:center;}
 
-.modal{position:absolute;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(4,6,10,.72);}
-.modal-card{width:min(460px,80%);background:linear-gradient(180deg,#232b38,#161b24);border:1px solid rgba(255,157,196,.3);border-radius:18px;padding:20px;box-shadow:0 24px 60px rgba(0,0,0,.6);}
+.modal{position:absolute;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;
+  padding:12px;background:rgba(4,6,10,.72);}
+.modal-card{width:min(460px,92%);max-height:100%;overflow-y:auto;background:linear-gradient(180deg,#232b38,#161b24);border:1px solid rgba(255,157,196,.3);border-radius:18px;padding:20px;box-shadow:0 24px 60px rgba(0,0,0,.6);}
 .modal-card h3{margin:0 0 10px;font-size:15px;letter-spacing:2px;color:var(--pink);}
 .modal-card p{margin:0 0 16px;font-size:13.5px;line-height:1.85;color:#e6eef6;white-space:pre-wrap;}
-.ending-card{width:min(560px,86%);text-align:center;background:radial-gradient(120% 120% at 50% 0%,#2a1f33,#12161f 70%);border:1px solid rgba(255,157,196,.35);border-radius:22px;padding:26px 24px;box-shadow:0 30px 80px rgba(0,0,0,.7);}
+.ending-card{width:min(560px,92%);max-height:100%;overflow-y:auto;text-align:center;background:radial-gradient(120% 120% at 50% 0%,#2a1f33,#12161f 70%);border:1px solid rgba(255,157,196,.35);border-radius:22px;padding:26px 24px;box-shadow:0 30px 80px rgba(0,0,0,.7);}
 .ending-card .stars{color:#ffd166;font-size:20px;letter-spacing:6px;margin-bottom:8px;animation:twinkle 3s infinite;}
 .ending-card h2{font-size:clamp(16px,2.2vw,21px);line-height:1.85;margin:0 0 10px;letter-spacing:2px;
   background:linear-gradient(180deg,#fff,#ffd6e6 60%,#ff9dc4);-webkit-background-clip:text;background-clip:text;color:transparent;}
@@ -218,12 +219,13 @@ button{font-family:inherit;color:#fff;border:none;background:none;cursor:pointer
 }
 
 /* ---------- 照片与相册 ---------- */
-.photo-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;
-  max-height:92%;max-width:86%;padding:12px;border-radius:16px;
+.photo-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;
+  max-height:100%;max-width:92%;padding:10px 12px;border-radius:16px;overflow:hidden;
   background:linear-gradient(180deg,#20262f,#141920);border:1px solid rgba(255,255,255,.14);
   box-shadow:0 24px 60px rgba(0,0,0,.65);}
-.photo-card img{max-height:62vh;max-width:100%;border-radius:8px;background:#0b0e13;
-  box-shadow:0 8px 24px rgba(0,0,0,.5);}
+.photo-card img{flex:1 1 auto;min-height:0;max-height:100%;max-width:100%;object-fit:contain;
+  border-radius:8px;background:#0b0e13;box-shadow:0 8px 24px rgba(0,0,0,.5);}
+.photo-card .btn{margin-top:auto;}
 .photo-cap{text-align:center;max-width:520px;}
 .photo-cap h3{margin:0 0 4px;font-size:13px;letter-spacing:2px;color:#ffd6e6;}
 .photo-cap p{margin:0;font-size:12px;line-height:1.7;color:#d5e2ee;}
@@ -1749,10 +1751,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const mn = Math.min(dl, dr, dt, db);
         const face = (mn === db) ? 's' : (mn === dt) ? 'n' : (mn === dr) ? 'e' : 'w';
         let floors, style;
-        if (zone === 'cbd') { floors = Math.round(G.rand(14, 28)); style = 'glass'; }
-        else if (zone === 'office') { floors = Math.round(G.rand(7, 13)); style = Math.random() < .6 ? 'modern' : 'glass'; }
-        else if (zone === 'res') { floors = Math.round(G.rand(4, 9)); style = Math.random() < .55 ? 'modern' : 'brick'; }
-        else { floors = Math.round(G.rand(2, 4)); style = Math.random() < .55 ? 'brick' : 'modern'; }
+        if (zone === 'cbd') { floors = Math.round(G.rand(5, 8)); style = 'glass'; }
+        else if (zone === 'office') { floors = Math.round(G.rand(3, 5)); style = Math.random() < .6 ? 'modern' : 'glass'; }
+        else if (zone === 'res') { floors = Math.round(G.rand(2, 4)); style = Math.random() < .55 ? 'modern' : 'brick'; }
+        else { floors = Math.round(G.rand(2, 3)); style = Math.random() < .55 ? 'brick' : 'modern'; }
         this.addBuilding(cx, cz, w, d, floors, style, zone, face);
       }
     },
@@ -2411,7 +2413,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         this.addPlanter(cx + Math.cos(a) * 8, cz + Math.sin(a) * 8);
       }
       // 广场地标塔（西北角）
-      this.addBuilding(cx - 16, cz - 16, 18, 18, 20, 'glass', 'cbd', 's');
+      this.addBuilding(cx - 16, cz - 16, 18, 18, 9, 'glass', 'cbd', 's');
       // 塔楼入口
       MB.box('glass', cx - 16, 2.0, cz - 16 + 9.2, 6.0, 3.2, 0.2, 0xbfe3f0, 4);
       MB.box('metal', cx - 16, 3.8, cz - 16 + 9.9, 7.4, 0.24, 1.8, 0xb9c0c8, 2);
@@ -5733,6 +5735,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       $('noteClose').addEventListener('click', () => { $('noteModal').classList.add('hidden'); G.paused = false; });
       $('endingClose').addEventListener('click', () => { $('ending').classList.add('hidden'); G.paused = false; });
       $('photoClose').addEventListener('click', () => { $('photoModal').classList.add('hidden'); G.paused = false; });
+      // 点背景也能关掉（横屏时按钮偶尔会被挤到视野外，给一个兜底出口）
+      const backdropClose = (id) => {
+        const el = $(id);
+        if (!el) return;
+        el.addEventListener('click', (e) => {
+          if (e.target === el) { el.classList.add('hidden'); G.paused = false; }
+        });
+      };
+      backdropClose('photoModal'); backdropClose('noteModal'); backdropClose('ending');
       $('albumClose').addEventListener('click', () => { $('albumModal').classList.add('hidden'); G.paused = false; });
       $('albumModal').addEventListener('click', (e) => { if (e.target.id === 'albumModal') { $('albumModal').classList.add('hidden'); G.paused = false; } });
       $('btnAbout').addEventListener('click', () => { $('about').classList.remove('hidden'); });
@@ -6388,7 +6399,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 215;
+  G.BUILD = 218;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
