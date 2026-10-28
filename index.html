@@ -12,6 +12,13 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="screen-orientation" content="landscape">
+<meta name="x5-orientation" content="landscape">
+<meta name="x5-page-mode" content="app">
+<meta name="full-screen" content="yes">
+<meta name="x5-fullscreen" content="true">
+<meta name="browsermode" content="application">
+<meta name="format-detection" content="telephone=no">
 <style>
 /* style.css —— 横屏优先 HUD / 安全区适配 */
 :root{
@@ -297,7 +304,7 @@ window.addEventListener('error', function(e){
       <div class="obj-line"><span id="objClue">留言 0/6</span><span id="objFlower">小花 0/12</span></div>
       <div class="obj-line"><span id="objPhoto">照片 0</span><span id="objPlace">地点 0</span></div>
       <div class="obj-line"><span id="objCard">明信片 0/24</span></div>
-      <div class="obj-line"><span id="objMoment">惊喜 0/7</span></div>
+      <div class="obj-line"><span id="objMoment">惊喜 0/11</span></div>
     </div>
   </div>
 
@@ -1188,7 +1195,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     donut: { name: '甜甜圈', icon: '🍩', desc: '粉色的糖霜甜甜圈，甜度刚好。', stack: 9, use: 'eat' },
     note: { name: '便签', icon: '📝', desc: '一张折起来的便签。', stack: 9, quest: true },
     cash: { name: '零钱', icon: '💵', desc: '捡到的零钱，可以在街头小摊买东西。', stack: 99 },
-    postcard: { name: '城市明信片', icon: '✉️', desc: '收集城市各处的明信片，凑齐一本旅行手册。', stack: 1 }
+    postcard: { name: '城市明信片', icon: '✉️', desc: '收集城市各处的明信片，凑齐一本旅行手册。', stack: 1 },
+    bottle: { name: '许愿瓶', icon: '🍾', desc: '玻璃瓶里塞着一张卷起来的纸条，晃一晃有海浪的声音。', stack: 9 },
+    letter: { name: '情书', icon: '💌', desc: '信封上是熟悉的字迹：「给每天都想见到的你」。', stack: 9 }
   };
 
   const Inv = G.Inv = {
@@ -1760,7 +1769,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     },
 
     /* ---------- 首层：门洞 + 室内 ---------- */
-    buildGroundFloor(cx, cz, w, d, style, zone, face) {
+    buildGroundFloor(cx, cz, w, d, style, zone, face, topH) {
       const MB = this.MB, H = 4.2, t = 0.46;
       const x0 = cx - w / 2, x1 = cx + w / 2, z0 = cz - d / 2, z1 = cz + d / 2;
       const doorW = 3.0, doorH = 3.1;
@@ -1862,7 +1871,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         else { hx = x0 - 0.02; hz = cz - doorW / 2 + 0.08; base = -Math.PI / 2; open = 1; }
         this.doorSpecs.push({ x: hx, z: hz, y: 0.22, w: dw, h: dh, base, open, a: 0, target: 0 });
       }
-      this.footprints.push({ x0, x1, z0, z1 });
+      this.footprints.push({ x0, x1, z0, z1, top: topH || 8 });
 
       // 楼底接触阴影（让建筑"坐"在地面上）
       this.MB.plane('shadow', cx, 0.205, cz, w + 7, d + 7, 0xffffff, 1, 1, 1);
@@ -2065,7 +2074,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const uvRep = Math.max(2, Math.min(10, Math.round(bodyH / 3.1)));
       MB.box(style, cx, 4.2 + bodyH / 2, cz, w, bodyH, d, tint, uvRep);
       // 首层：真实墙体 + 门洞 + 室内（可自由进入）
-      this.buildGroundFloor(cx, cz, w, d, style, zone, face);
+      this.buildGroundFloor(cx, cz, w, d, style, zone, face, h);
       // 屋顶
       MB.box('concrete', cx, h + 0.42, cz, w + 0.7, 0.84, d + 0.7, 0xcfccc4, 6);
       MB.box('concrete', cx, h + 1.35, cz, w + 0.5, 1.0, 0.3, 0xc9c6be, 3);
@@ -2914,7 +2923,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       case 'garage': buildGarage(MB, scene, cx, cz, info); break;
     }
     info.inside = (x, z) => x > info.x0 && x < info.x1 && z > info.z0 && z < info.z1;
-    if (G.W && G.W.footprints) G.W.footprints.push({ x0: info.x0, x1: info.x1, z0: info.z0, z1: info.z1 });
+    if (G.W && G.W.footprints) G.W.footprints.push({ x0: info.x0, x1: info.x1, z0: info.z0, z1: info.z1, top: info.top || 14 });
     I.list.push(info);
     return info;
   };
@@ -2962,6 +2971,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     // 门口交互
     reg({ kind: 'door', x: cx, y: y0 + 1.2, z: cz + d / 2, label: '进入咖啡店', spawn: { x: cx, z: cz + d / 2 - 2.2 } });
     note(MB, cx + 9, y0 + 1.5, cz + 1.4, -Math.PI / 2, '「今日特调：蜂蜜柚子茶。给最可爱的客人打八折。」', '菜单');
+    info.top = y0 + h + 7.5;
     info.name = '暖阳咖啡馆';
   }
 
@@ -3043,6 +3053,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     reg({ kind: 'door', x: cx, y: y0 + 1.2, z: cz + d / 2, label: '进入便利店', spawn: { x: cx, z: cz + d / 2 - 2.0 } });
     reg({ kind: 'shop', x: cx + 5.2, y: y0 + 1.1, z: cz + 4.9, label: '购买热可可（¥12）', item: 'coffee', price: 12 });
     reg({ kind: 'shop', x: cx - 5.0, y: y0 + 1.0, z: cz + 5.3, label: '买一个甜甜圈（¥8）', item: 'donut', price: 8 });
+    info.top = y0 + h + 6.2;
     info.name = '星光便利店';
   }
 
@@ -3093,6 +3104,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     roof(MB, cx, cz, w, d, y0 + h * 2 + upperH, 0xc9bfb2);
     reg({ kind: 'door', x: cx, y: y0 + 1.2, z: cz + d / 2, label: '进入公寓楼', spawn: { x: cx, z: cz + d / 2 - 2.2 } });
     note(MB, cx + 4, y0 + 1.5, cz + 8.6, Math.PI, '「一楼的钥匙放在门口花盆下面，别忘了。」', '租客留言');
+    info.top = y0 + h * 2 + 8.0;
     info.name = '梧桐公寓';
   }
 
@@ -3145,6 +3157,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     box(MB, 'metal', cx, y0 + h * 2 + upperH + 2, cz, 0.4, 4, 0.4, 0xd0d4da);
     reg({ kind: 'door', x: cx, y: y0 + 1.2, z: cz + d / 2, label: '进入写字楼', spawn: { x: cx, z: cz + d / 2 - 2.4 } });
     reg({ kind: 'note', x: cx + 6, y: y0 + 1.2, z: cz + 5.3, label: '查看前台', msg: '前台屏幕上滚动着一行字：「欢迎山雨辰小公主视察本大厦。」', title: '前台' });
+    info.top = y0 + h * 2 + 13;
     info.name = '云顶大厦';
   }
 
@@ -3354,6 +3367,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     reg({ kind: 'note', x: cx - 6, y: y0 + h + 1.6, z: cz - 9.1, label: '查看相框', msg: '照片里是江边的夜景，玻璃上倒映着两个人影。', title: '相框' });
     reg({ kind: 'camera', x: cx, y: y0 + h + 1.4, z: bz1 - 1.2, label: '在阳台看风景' });
     reg({ kind: 'lightswitch', x: cx + 12.0, y: y0 + 1.4, z: cz + 8, label: '开关全屋灯光' });
+    info.top = y0 + h * 2 + 6.0;
     info.name = '公主的专属公寓';
     info.home = true;
   }
@@ -3395,6 +3409,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     // 顶层
     slab(MB, x0, z0, x1, z1, y0 + h * 2, 0.3, 'concrete', 0x9c988f);
     box(MB, 'concrete', cx, y0 + h * 2 + 0.7, z1, w, 1.0, 0.3, 0xb8b4ab);
+    info.top = y0 + h + 4.0;
     info.name = '城市停车楼';
     info.parking = true;
   }
@@ -3453,15 +3468,23 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       // —— 腿（肤色 + 白袜 + 棕鞋）
       const legL = new THREE.Group(), legR = new THREE.Group();
       for (const [leg, sx] of [[legL, -0.095], [legR, 0.095]]) {
-        const thigh = boxMesh(0.15, 0.68, 0.17, C.skin);
-        thigh.position.y = -0.34;
-        const sock = boxMesh(0.16, 0.17, 0.18, C.sock);
-        sock.position.y = -0.63;
+        // 大腿
+        const thigh = boxMesh(0.15, 0.44, 0.17, C.skin);
+        thigh.position.y = -0.22;
+        // 膝关节（小腿 + 白袜 + 鞋挂在它下面，可以弯）
+        const knee = new THREE.Group();
+        knee.position.y = -0.44;
+        const shin = boxMesh(0.135, 0.2, 0.155, C.skin);
+        shin.position.y = -0.1;
+        const sock = boxMesh(0.16, 0.18, 0.18, C.sock);
+        sock.position.y = -0.22;
         const shoe = boxMesh(0.18, 0.1, 0.27, C.shoe);
-        shoe.position.set(0, -0.73, 0.035);
-        leg.add(thigh, sock, shoe);
+        shoe.position.set(0, -0.32, 0.035);
+        knee.add(shin, sock, shoe);
+        leg.add(thigh, knee);
         leg.position.set(sx, 0.78, 0);
         body.add(leg);
+        if (sx < 0) this.kneeL = knee; else this.kneeR = knee;
       }
       this.legL = legL; this.legR = legR;
 
@@ -3726,7 +3749,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const sp = this.speed;
       const A = this.anim || (this.anim = {
         legL: 0, legR: 0, armL: 0, armR: 0, armLz: 0.1, armRz: -0.1,
-        bodyY: 0, tiltX: 0, headX: 0, headY: 0, gait: 0, lean: 0, land: 0, air: 0, fallV: 0
+        bodyY: 0, tiltX: 0, headX: 0, headY: 0, gait: 0, lean: 0, land: 0, air: 0, fallV: 0,
+        kneeL: 0.05, kneeR: 0.05
       });
       const g0 = G;
 
@@ -3745,7 +3769,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const ph = this.movePhase;
       const runW = A.gait > 1 ? Math.min(1, (A.gait - 1) / 0.28) : 0;
 
-      let tLegL = 0, tLegR = 0, tArmL = 0, tArmR = 0, tArmLz = 0.1, tArmRz = -0.1;
+      let tLegL = 0, tLegR = 0, tKneeL = 0.05, tKneeR = 0.05, tArmL = 0, tArmR = 0, tArmLz = 0.1, tArmRz = -0.1;
       let tBodyY = 0, tTiltX = 0, tHeadX = 0, tHeadY = 0, tLeanZ = 0;
       let k = 12;
 
@@ -3755,6 +3779,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const prep = g0.clamp(-this.vel.y / 13, 0, 1);
         tLegL = 0.55 - v * 0.25 + prep * 0.38;
         tLegR = -0.22 + v * 0.18 + prep * 0.14;
+        tKneeL = 0.55 + prep * 0.5; tKneeR = 0.25 + prep * 0.35;
         tArmL = -2.0 + v * 0.35 - prep * 0.45;
         tArmR = -2.0 + v * 0.35 - prep * 0.45;
         tArmLz = 0.5; tArmRz = -0.5;
@@ -3764,7 +3789,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         k = 10;
         this.state = 'jump';
       } else if (this.sitting) {
-        tLegL = -1.5; tLegR = -1.5;
+        tLegL = -1.5; tLegR = -1.5; tKneeL = 1.5; tKneeR = 1.5;
         tArmL = -0.35; tArmR = -0.35;
         tArmLz = 0.15; tArmRz = -0.15;
         tBodyY = -0.42;
@@ -3773,6 +3798,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       } else if (this.crouch) {
         tLegL = -0.9 + Math.sin(ph * 2) * 0.22 * A.gait;
         tLegR = -0.9 - Math.sin(ph * 2) * 0.22 * A.gait;
+        tKneeL = 1.35; tKneeR = 1.35;
         tArmL = -0.4; tArmR = -0.4;
         tArmLz = 0.2; tArmRz = -0.2;
         tBodyY = -0.12;
@@ -3784,9 +3810,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         A.gait = g0.damp(A.gait, wantGait, moving ? 13 : 9, dt);
         const gN = Math.min(A.gait, 1.25);
         const s1 = Math.sin(ph * 2), c1 = Math.cos(ph * 2);
-        const swing = 0.56 * gN;
+        const swing = (0.40 + 0.16 * runW) * gN;      // 有屈膝后步幅不用那么大
         tLegL = s1 * swing;
         tLegR = -s1 * swing;
+        // 向后摆的那条腿屈膝，抬脚离地（两腿相位相反）
+        tKneeL = Math.max(0, -s1) * (0.85 + 0.5 * runW) * Math.min(1, gN * 1.3);
+        tKneeR = Math.max(0, s1) * (0.85 + 0.5 * runW) * Math.min(1, gN * 1.3);
         // 手臂反向摆，跑起来幅度更大、肘部外张
         tArmL = -s1 * (swing * 0.82 + 0.1 * runW);
         tArmR = s1 * (swing * 0.82 + 0.1 * runW);
@@ -3813,8 +3842,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       /* —— 落地缓冲叠加：下蹲 + 手臂前伸 —— */
       if (land > 0.001) {
         tBodyY -= 0.2 * land;
-        tLegL += 0.62 * land;
-        tLegR += 0.62 * land;
+        tLegL += 0.42 * land;
+        tLegR += 0.42 * land;
+        tKneeL += 0.75 * land;
+        tKneeR += 0.75 * land;
         tArmL += -0.5 * land;
         tArmR += -0.5 * land;
         tArmLz += 0.24 * land;
@@ -3831,6 +3862,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       /* —— 阻尼到关节（所有状态共用，切换自然） —— */
       A.legL = g0.damp(A.legL, tLegL, k, dt);
       A.legR = g0.damp(A.legR, tLegR, k, dt);
+      A.kneeL = g0.damp(A.kneeL || 0.05, tKneeL, k * 0.9, dt);
+      A.kneeR = g0.damp(A.kneeR || 0.05, tKneeR, k * 0.9, dt);
       A.armL = g0.damp(A.armL, tArmL, k, dt);
       A.armR = g0.damp(A.armR, tArmR, k, dt);
       A.armLz = g0.damp(A.armLz, tArmLz, k, dt);
@@ -3843,6 +3876,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       this.legL.rotation.x = A.legL;
       this.legR.rotation.x = A.legR;
+      if (this.kneeL) this.kneeL.rotation.x = A.kneeL;
+      if (this.kneeR) this.kneeR.rotation.x = A.kneeR;
       this.armL.rotation.x = A.armL;
       this.armR.rotation.x = A.armR;
       this.armL.rotation.z = A.armLz;
@@ -4902,6 +4937,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       this.points.visible = false;
       scene.add(this.points);
 
+      // 屋顶高度网格：判断雨滴有没有落进楼里
+      this.grid = null;
+
       // 夜间灯：跟随玩家最近的几盏路灯
       this.lights = [];
       for (let i = 0; i < 4; i++) {
@@ -4910,6 +4948,31 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         this.lights.push(l);
       }
       this._lightT = 0;
+    },
+
+    buildGrid() {
+      const cell = 2, x0 = -204, z0 = -204, n = 210;
+      const g = new Uint8Array(n * n);
+      for (const f of G.W.footprints) {
+        const top = Math.min(250, Math.round(f.top || 8));
+        const ix0 = Math.max(0, Math.floor((f.x0 - x0) / cell)), ix1 = Math.min(n - 1, Math.floor((f.x1 - x0) / cell));
+        const iz0 = Math.max(0, Math.floor((f.z0 - z0) / cell)), iz1 = Math.min(n - 1, Math.floor((f.z1 - z0) / cell));
+        for (let ix = ix0; ix <= ix1; ix++) {
+          for (let iz = iz0; iz <= iz1; iz++) {
+            const k = iz * n + ix;
+            if (g[k] < top) g[k] = top;
+          }
+        }
+      }
+      this.grid = g; this.gn = n; this.gcell = cell; this.gx0 = x0; this.gz0 = z0;
+    },
+
+    /* 该点是否在室内（雨滴落到屋顶以下就要藏起来） */
+    roofAt(x, z) {
+      if (!this.grid) return 0;
+      const ix = ((x - this.gx0) / this.gcell) | 0, iz = ((z - this.gz0) / this.gcell) | 0;
+      if (ix < 0 || iz < 0 || ix >= this.gn || iz >= this.gn) return 0;
+      return this.grid[iz * this.gn + ix];
     },
 
     setRain(v) {
@@ -4933,9 +4996,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const p = this.points.geometry.attributes.position;
         const arr = p.array;
         const cx = playerPos.x, cz = playerPos.z;
+        if (!this.grid && G.W && G.W.footprints && G.W.footprints.length) this.buildGrid();
         for (let i = 0; i < this.count; i++) {
           arr[i * 3 + 1] -= (22 + (i % 7)) * dt;
           arr[i * 3] += 3.2 * dt;
+          // 落进楼里（低于该处屋顶）就藏起来，雨只下在屋顶和街上
+          const top = this.grid ? this.roofAt(arr[i * 3], arr[i * 3 + 2]) : 0;
+          if (top && arr[i * 3 + 1] < top) { arr[i * 3 + 1] = -999; }
           if (arr[i * 3 + 1] < 0) {
             arr[i * 3 + 1] = 32 + Math.random() * 12;
             arr[i * 3] = cx + (Math.random() - 0.5) * 90;
@@ -5096,7 +5163,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           const r = W.blockRect(bx, bz);
           const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
           const half = 26 - 1.8;
-          const sides = [0, 1, 2, 3].sort(() => Math.random() - 0.5).slice(0, 2);
+          const sides = [0, 1, 2, 3].sort(() => Math.random() - 0.5).slice(0, 4);
           for (const side of sides) {
             let x, z, rot;
             if (side === 0) { x = cx + (Math.random() * 2 - 1) * (half - 4); z = cz - half; rot = Math.PI; }
@@ -5106,6 +5173,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             if (G.COL.pointSolid(x, 0.6, z) || G.COL.pointSolid(x, 0.2, z)) continue;
             if (W.nearAnyDoor && W.nearAnyDoor(x, z, 4.5)) continue;
             spots.push({ x, z, y: 0.18, rot: rot + (Math.random() - 0.5) * 0.35, item: (spots.length + ((Math.random() * 3) | 0)) % 6 });
+            // 同一条边再错开 7m 补一张，让沿街广告牌更密一点
+            {
+              const ox = (side === 0 || side === 1) ? 7 : 0, oz = (side === 2 || side === 3) ? 7 : 0;
+              const x2 = x + ox, z2 = z + oz;
+              if (!G.COL.pointSolid(x2, 0.6, z2) && !(W.nearAnyDoor && W.nearAnyDoor(x2, z2, 3.2))) {
+                spots.push({ x: x2, z: z2, y: 0.18, rot: rot + (Math.random() - 0.5) * 0.4, item: (spots.length + 2) % 6 });
+              }
+            }
           }
         }
       }
@@ -5637,7 +5712,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       $('objPhoto').textContent = `照片 ${p.photos}`;
       $('objPlace').textContent = `地点 ${p.places}`;
       const oc = $('objCard'); if (oc) oc.textContent = `明信片 ${p.cards || 0}/${p.totalCards || 24}`;
-      const om = $('objMoment'); if (om) om.textContent = `惊喜 ${(G.Moments ? Object.keys(G.Moments.found).filter(k => k !== '__finale').length : 0)}/7`;
+      const om = $('objMoment'); if (om) om.textContent = `惊喜 ${(G.Moments ? Object.keys(G.Moments.found).filter(k => k !== '__finale').length : 0)}/${(G.Moments ? G.Moments.total : 11)}`;
     },
 
     tickClock() {
@@ -6029,7 +6104,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   /* ---------- 小工具 ---------- */
   const M = G.Moments = {
-    ready: false, found: {}, total: 7, spots: [],
+    ready: false, found: {}, total: 11, spots: [],
     hearts: null, sparks: null, seq: [], tweens: [], timers: 0,
     notes: 0,
 
@@ -6266,6 +6341,62 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       o.light = light;
     },
 
+    /* 广场：喷泉边 */
+    prop_fountain(g, o) {
+      const basin = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.8, 0.46, 18),
+        new THREE.MeshStandardMaterial({ color: 0xcfd6dc, roughness: .72 }));
+      basin.position.y = 0.43;
+      const water = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.07, 18),
+        new THREE.MeshStandardMaterial({ color: 0x7fc3e8, emissive: 0x3d7fa8, emissiveIntensity: .4, roughness: .18, transparent: true, opacity: .88 }));
+      water.position.y = 0.66;
+      const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.13, 1.3, 8),
+        new THREE.MeshStandardMaterial({ color: 0xbfe6ff, emissive: 0x8fd3ff, emissiveIntensity: 1.7, transparent: true, opacity: .5 }));
+      jet.position.y = 1.25;
+      const light = new THREE.PointLight(0x9fd8ff, 1.7, 7.5, 2);
+      light.position.set(0, 1.7, 0);
+      g.add(basin, water, jet, light);
+      this.jet = jet; o.light = light;
+    },
+
+    /* 公园：长椅上的两只杯子 */
+    prop_park(g, o) {
+      const seat = this.box(1.9, 0.1, 0.55, 0xb08050, 0, 0.6, 0);
+      const back = this.box(1.9, 0.5, 0.1, 0xb08050, 0, 0.88, -0.22);
+      for (const sx of [-0.8, 0.8]) g.add(this.box(0.1, 0.55, 0.5, 0x8f959d, sx, 0.3, 0));
+      const cupA = this.box(0.15, 0.18, 0.15, 0xa8ddff, -0.35, 0.73, 0.06, { glow: 0x5fb8e8, glowI: .5 });
+      const cupB = this.box(0.15, 0.18, 0.15, 0xffc9dd, 0.35, 0.73, 0.06, { glow: 0xff9dc4, glowI: .5 });
+      const light = new THREE.PointLight(0xffd9c0, 1.2, 5, 2); light.position.set(0, 1.2, 0);
+      g.add(seat, back, cupA, cupB, light);
+      o.light = light;
+    },
+
+    /* 公交站：一起等一班车 */
+    prop_bus(g, o) {
+      const pole = this.box(0.14, 2.9, 0.14, 0x9aa0a8, 0, 1.45, 0);
+      const board = this.box(1.1, 0.7, 0.08, 0x223040, 0, 2.7, 0, { glow: 0x8fd3ff, glowI: .5 });
+      const frame = this.box(1.2, 0.82, 0.06, 0xbfe3f0, 0, 2.7, -0.04, { alpha: .5, rough: .1 });
+      const lamp = this.box(0.5, 0.12, 0.2, 0xfff0c8, 0, 2.95, 0.1, { glow: 0xffe2a8, glowI: 2.2, noShadow: true });
+      const light = new THREE.PointLight(0xffe2b0, 1.5, 6, 2); light.position.set(0, 2.6, 0.3);
+      g.add(pole, board, frame, lamp, light);
+      o.light = light;
+    },
+
+    /* 花摊：一桶一桶的玫瑰 */
+    prop_flower(g, o) {
+      const bench = this.box(1.8, 0.12, 0.6, 0xa9713f, 0, 0.7, 0);
+      for (const sx of [-0.7, 0.7]) g.add(this.box(0.1, 0.7, 0.5, 0x8f959d, sx, 0.35, 0));
+      const colors = [0xff6f91, 0xffd166, 0xc792ff, 0xffffff, 0xff9d6e];
+      for (let i = 0; i < 5; i++) {
+        const bx = -0.72 + i * 0.36;
+        g.add(this.box(0.24, 0.26, 0.24, 0xdfe3e8, bx, 0.88, 0));
+        g.add(this.box(0.3, 0.3, 0.3, colors[i], bx, 1.14, 0, { glow: colors[i], glowI: .35 }));
+        g.add(this.box(0.18, 0.2, 0.18, 0x4f8a3d, bx, 1.32, 0));
+      }
+      const light = new THREE.PointLight(0xffd0dd, 1.4, 5.5, 2); light.position.set(0, 1.6, 0.2);
+      g.add(bench, light);
+      o.light = light;
+    },
+
     /* 观景台：结局 */
     prop_bench(g, o) {
       const b1 = this.box(1.8, 0.1, 0.5, 0xa9713f, 0, 0.62, 0);
@@ -6332,6 +6463,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       const deck = W.viewDeck;
       if (deck) add('bench', deck.x + 3.5, deck.z, 0, SPOTS.bench);
+
+      // —— 街头 / 公园里的额外惊喜
+      const bcx = (bx) => W.OFF + bx * W.P + W.BLOCK / 2;
+      const bcz = (bz) => W.OFF + bz * W.P + W.BLOCK / 2;
+      add('fountain', bcx(2) + 3, bcz(2) - 13, 0, SPOTS.fountain);
+      add('park', bcx(0) - 7, bcz(3) - 5, 0, SPOTS.park);
+      add('bus', bcx(1) - 13, bcz(1) + 12, 0, SPOTS.bus);
+      add('flower', bcx(2) - 9, bcz(0) + 3, 0, SPOTS.flower);
     },
 
     /* ---------- 每帧 ---------- */
@@ -6417,6 +6556,26 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       text: '八音盒自己转起来了。这首曲子她练了很久，只弹给一个人听——「你听，第一句是你的名字。」',
       gift: 'postcard'
     },
+    fountain: {
+      label: '广场喷泉', title: '中央广场 · 丢一枚硬币',
+      text: '她背对着喷泉抛硬币，硬币落进水里的时候小声说：「愿望说出来就不灵了，所以我不告诉你。」',
+      gift: 'postcard'
+    },
+    park: {
+      label: '公园的长椅', title: '公园 · 两杯饮料',
+      text: '长椅上放着两杯饮料，一杯冰的一杯不冰的。旁边压着一张纸条：「猜到你要来，先给你占好位置。」',
+      gift: 'postcard'
+    },
+    bus: {
+      label: '7 路站牌', title: '公交站 · 一起等一班车',
+      text: '末班车还没来。她把头靠在你肩上：「坐过站也没关系，反正城市不大，反正你在旁边。」',
+      gift: 'postcard'
+    },
+    flower: {
+      label: '街角花摊', title: '花摊 · 挑一束',
+      text: '老板说今天玫瑰只剩五支，「都被一个每天来问有没有新鲜的姑娘买走了」。',
+      gift: 'postcard'
+    },
     bench: {
       label: '江边的双人长椅', title: '滨江 · 我们的故事',
       text: '江风把声音吹得很远。灯一盏一盏亮起来，像有人在替这座城数心跳。（集齐六处惊喜，抬头看天。）'
@@ -6431,7 +6590,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 221;
+  G.BUILD = 223;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
@@ -6567,6 +6726,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       pick('donut', bcx(1) - 3, bcz(3) - 3 + 4, 1.3);
       pick('rose', bcx(2) + 12, bcz(0) + 12, 0.9);
 
+      // —— 许愿瓶与情书：藏在城市角落和房子里的额外收集
+      const bottleSpots = [
+        [bcx(2) + 10, bcz(2) - 16], [bcx(0) - 12, bcz(2) + 14], [bcx(5) - 9, bcz(4) + 9],
+        [bcx(1) + 15, bcz(5) - 17], [bcx(4) + 12, bcz(1) - 12]
+      ];
+      bottleSpots.forEach(q => pick('bottle', q[0], q[1], 1.0));
+      pick('letter', APT.x + 2.5, APT.z + 3.5, 1.25);
+      pick('letter', OFFICE.x + 5.5, OFFICE.z + 7.0, 1.55);
+
       // —— 城市明信片：藏进建筑里，鼓励进楼探索
       const cardSpots = [];
       for (let i = 0; i < W.footprints.length; i += 3) {
@@ -6635,7 +6803,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         G.UI.toast('山雨辰小公主，欢迎来到这座城市', 3200);
         setTimeout(() => G.UI.hint('左下摇杆移动 · 右侧空白拖动镜头 · 右下按钮互动'), 1200);
       };
-      document.getElementById('btnStart').addEventListener('click', start);
+      document.getElementById('btnStart').addEventListener('click', () => {
+        // 尽量把页面变成"全屏横屏 App"：桌面/PWA 会真正锁横屏，普通 WebView 会失败但我们已经有旋转舞台兜底
+        try {
+          const el = document.documentElement;
+          if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+        } catch (e) {}
+        try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); } catch (e) {}
+        start();
+      });
       document.getElementById('btnContinue').addEventListener('click', () => {
         if (G.Save.has()) { start(); G.Save.load(); }
         else start();
