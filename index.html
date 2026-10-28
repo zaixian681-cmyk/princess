@@ -1031,7 +1031,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       this.buildSky();
       this.onResize();
-      addEventListener('resize', () => this.onResize());
+      const refresh = () => {
+        this.onResize();
+        if (G.UI) {
+          if (G.UI.updateOrientation) G.UI.updateOrientation();
+          document.querySelectorAll('.panel:not(.hidden)').forEach(p => G.UI.layoutPanel(p));
+        }
+      };
+      this.refreshLayout = refresh;
+      addEventListener('resize', refresh);
+      addEventListener('orientationchange', () => {
+        refresh(); setTimeout(refresh, 80); setTimeout(refresh, 350); setTimeout(refresh, 900);
+      });
+      document.addEventListener('fullscreenchange', () => {
+        refresh(); setTimeout(refresh, 80); setTimeout(refresh, 350); setTimeout(refresh, 900);
+      });
+      if (window.visualViewport) visualViewport.addEventListener('resize', () => setTimeout(refresh, 120));
       return this;
     },
     buildSky() {
@@ -1085,9 +1100,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       this.scene.add(this.moon);
     },
     onResize() {
-      const stage = document.getElementById('stage');
-      const w = stage ? stage.clientWidth : innerWidth;
-      const h = stage ? stage.clientHeight : innerHeight;
+      let w = Math.max(1, Math.round(innerWidth));
+      let h = Math.max(1, Math.round(innerHeight));
+      if (h > w) { const t = w; w = h; h = t; }   // 竖屏：按旋转 90° 后的横屏尺寸渲染
       this.canvas.width = Math.floor(w * Math.min(devicePixelRatio, 2) * this.renderScale);
       this.canvas.height = Math.floor(h * Math.min(devicePixelRatio, 2) * this.renderScale);
       this.renderer.setSize(w, h, false);
@@ -2763,9 +2778,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
     finish() {
       const scene = this.scene;
-      this.groundDetail();
-      this.buildTreeCanopies();
-      this.spawnSignInfo = this.spawnTowerSign();
+      // 细节装饰出错不许影响主体：每一块都单独兜底
+      try { this.groundDetail(); } catch (e) { console.warn('groundDetail', e); }
+      try { this.buildTreeCanopies(); } catch (e) { console.warn('treeCanopies', e); }
+      try { this.spawnSignInfo = this.spawnTowerSign(); } catch (e) { console.warn('spawnSign', e); this.spawnSignInfo = null; }
       const mats = {};
       const meshes = this.MB.build((key) => {
         mats[key] = mats[key] || this.material(key);
@@ -3446,6 +3462,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   /* 日常杂物：让房间有"住过人"的痕迹（全部合并进 MeshBuilder，几乎不增加 draw call） */
   function clutter(MB, x0, z0, x1, z1, yb, n) {
+    if (!(x1 > x0) || !(z1 > z0)) return;
     if (x1 - x0 < 2 || z1 - z0 < 2) return;
     const rnd = G.rand;
     for (let i = 0; i < n; i++) {
@@ -3666,7 +3683,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     // 顶层
     slab(MB, x0, z0, x1, z1, y0 + h * 2, 0.3, 'concrete', 0x9c988f);
     box(MB, 'concrete', cx, y0 + h * 2 + 0.7, z1, w, 1.0, 0.3, 0xb8b4ab);
-    clutter(MB, s.x0 + 1, s.z0 + 1, s.x1 - 1, s.z1 - 1, FLOOR, 10);
+    clutter(MB, x0 + 1, z0 + 1, x1 - 1, z1 - 1, FLOOR, 10);
     info.top = y0 + h + 4.0;
     info.name = '城市停车楼';
     info.parking = true;
@@ -7059,7 +7076,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 239;
+  G.BUILD = 241;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
@@ -7349,6 +7366,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         } catch (e) {}
         try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); } catch (e) {}
         start();
+        // 全屏/锁横屏之后视口尺寸会变好几次，主动刷几遍，避免画面被挤成一条竖缝
+        if (G.R && G.R.refreshLayout) {
+          [60, 200, 500, 1000, 1600].forEach(t => setTimeout(G.R.refreshLayout, t));
+        }
       });
       document.getElementById('btnContinue').addEventListener('click', () => {
         if (G.Save.has()) { start(); G.Save.load(); }
