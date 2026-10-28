@@ -2747,8 +2747,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const dx = Math.sin(rotY), dz = Math.cos(rotY);
       const hd = Math.max((fp.x1 - fp.x0), (fp.z1 - fp.z0)) / 2 - 2.6;
       const sx = cx + dx * hd, sz = cz + dz * hd;
+      // 这栋楼屋顶本来就有一块照片广告牌（顶到 h+5.6 左右），招牌必须抬到它上方，别互相遮挡
       G.roofSign(this.scene, sx, top, sz, '山雨辰小公主大厦',
-        { w: Math.min(22, (fp.x1 - fp.x0) * 1.02), h: 3.6, stand: 3.0, rotY, glow: 1.9 });
+        { w: Math.min(22, (fp.x1 - fp.x0) * 1.02), h: 3.2, stand: 6.6, rotY, glow: 2.0 });
       return { x: Math.round(cx), z: Math.round(cz), top, dist: Math.round(rectDist(fp, sp.x, sp.z)) };
     },
 
@@ -3412,6 +3413,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const br = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.1, 0.16),
         new THREE.MeshStandardMaterial({ color: 0x8f959d, roughness: .6, metalness: .6 }));
       br.position.set(sx * w * 0.34, stand * 0.55, 0.32);
+      br.scale.y = Math.max(1, stand / 3.4);
       br.rotation.x = 0.5;
       gpr.add(br);
     }
@@ -6873,7 +6875,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 235;
+  G.BUILD = 236;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
