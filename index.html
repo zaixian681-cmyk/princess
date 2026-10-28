@@ -2356,6 +2356,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (h > 45 && Math.random() < 0.7) {
         MB.box('lamp', cx, h + 0.9, cz + d / 2 + 0.4, w * .9, 0.22, 0.16, 0xffffff, 1);
       }
+      // 近景立面细化（远处建筑不加，形成天然的细节分级）
+      const nearPilot = Math.hypot(cx - (-33), cz - (-16)) < 95;
+      if (nearPilot) this.facadeDetail(cx, cz, w, d, h, style, floors, zone, face);
       // 碰撞
       COL.addCenter(cx, 4.2 + (h - 4.2) / 2, cz, w + 0.5, h - 4.2, d + 0.5, 'building');
       return h;
@@ -2507,6 +2510,64 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       });
       this.homeRect = { x0, x1, z0, z1 };
       G.Private = this.homeRect;   // 别人不许进来
+    },
+
+    /* ---------- 近景立面细节：把方盒子变成"有窗框、有楼层、有设备"的楼 ---------- */
+    facadeDetail(cx, cz, w, d, h, style, floors, zone, face) {
+      const MB = this.MB;
+      const fh = (h - 4.2) / Math.max(1, floors);
+      const x0 = cx - w / 2, x1 = cx + w / 2, z0 = cz - d / 2, z1 = cz + d / 2;
+      const mullCol = style === 'glass' ? 0xb9c4cf : 0xcfc8bd;
+      const bandCol = style === 'brick' ? 0xc9b3a1 : 0xdcd8ce;
+      const sillCol = style === 'brick' ? 0xbfa896 : 0xe2ded4;
+      const step = style === 'glass' ? 2.6 : 3.1;   // 竖梃间距
+
+      // 楼层腰线（每一层都有，不再是 2~3 道）
+      for (let f = 1; f < floors; f++) {
+        const y = 4.2 + f * fh;
+        MB.box('concrete', cx, y, z0 - 0.08, w + 0.16, 0.16, 0.18, bandCol, 2);
+        MB.box('concrete', cx, y, z1 + 0.08, w + 0.16, 0.16, 0.18, bandCol, 2);
+        MB.box('concrete', x0 - 0.08, y, cz, 0.18, 0.16, d + 0.16, bandCol, 2);
+        MB.box('concrete', x1 + 0.08, y, cz, 0.18, 0.16, d + 0.16, bandCol, 2);
+      }
+      // 竖向窗框 + 窗台
+      for (let f = 0; f < floors; f++) {
+        const yb = 4.2 + f * fh, yc = yb + fh * 0.52;
+        // 窗台
+        if (f > 0) {
+          MB.box('concrete', cx, yb + 0.06, z0 - 0.05, w - 0.6, 0.1, 0.16, sillCol, 2);
+          MB.box('concrete', cx, yb + 0.06, z1 + 0.05, w - 0.6, 0.1, 0.16, sillCol, 2);
+          MB.box('concrete', x0 - 0.05, yb + 0.06, cz, 0.16, 0.1, d - 0.6, sillCol, 2);
+          MB.box('concrete', x1 + 0.05, yb + 0.06, cz, 0.16, 0.1, d - 0.6, sillCol, 2);
+        }
+        for (let x = x0 + 1.2; x < x1 - 0.8; x += step) {
+          MB.box('metal', x, yc, z0 - 0.06, 0.1, fh * 0.72, 0.12, mullCol, 1);
+          MB.box('metal', x, yc, z1 + 0.06, 0.1, fh * 0.72, 0.12, mullCol, 1);
+        }
+        for (let z = z0 + 1.2; z < z1 - 0.8; z += step) {
+          MB.box('metal', x0 - 0.06, yc, z, 0.12, fh * 0.72, 0.1, mullCol, 1);
+          MB.box('metal', x1 + 0.06, yc, z, 0.12, fh * 0.72, 0.1, mullCol, 1);
+        }
+      }
+      // 角部雨水管
+      for (const [px, pz] of [[x0 + 0.12, z0 + 0.12], [x1 - 0.12, z1 - 0.12]]) {
+        MB.box('metal', px, (4.2 + h) / 2, pz, 0.16, h - 4.2, 0.16, 0xb0b4b8, 1);
+      }
+      // 屋顶设备：空调机组 + 水箱 + 楼梯出屋面小屋
+      MB.box('concrete', cx + w * 0.22, h + 0.9, cz - d * 0.2, 2.6, 0.9, 2.0, 0xc8c4ba, 2);
+      MB.box('metal', cx - w * 0.18, h + 1.1, cz + d * 0.16, 1.6, 1.2, 1.6, 0xbfc4c8, 2);
+      MB.box('concrete', cx - w * 0.02, h + 1.4, cz - d * 0.02, 3.2, 2.4, 3.0, 0xd2cec4, 3);
+      MB.box('dark', cx - w * 0.02, h + 1.1, cz - d * 0.02 - 1.52, 1.0, 1.8, 0.1, 0x2a2d33, 1);
+      // 门口雨棚（朝门那一面）
+      const dir = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] }[face] || [0, 1];
+      const ex = cx + dir[0] * (w / 2), ez = cz + dir[1] * (d / 2);
+      MB.box('concrete', ex + dir[0] * 0.9, 3.5, ez + dir[1] * 0.9, dir[0] ? 2.0 : 4.2, 0.18, dir[1] ? 2.0 : 4.2, 0xd8d4ca, 2);
+      MB.box('metal', ex + dir[0] * 0.9, 3.28, ez + dir[1] * 0.9, dir[0] ? 1.8 : 4.0, 0.06, dir[1] ? 1.8 : 4.0, 0xb9bcc0, 1);
+      // 一层橱窗下的石材墙裙
+      MB.box('concrete', cx, 0.75, z0 - 0.03, w, 0.9, 0.14, 0xc4bcae, 3);
+      MB.box('concrete', cx, 0.75, z1 + 0.03, w, 0.9, 0.14, 0xc4bcae, 3);
+      MB.box('concrete', x0 - 0.03, 0.75, cz, 0.14, 0.9, d, 0xc4bcae, 3);
+      MB.box('concrete', x1 + 0.03, 0.75, cz, 0.14, 0.9, d, 0xc4bcae, 3);
     },
 
     /* ---------- 街道装饰 ---------- */
@@ -7618,7 +7679,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 261;
+  G.BUILD = 262;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
@@ -7721,11 +7782,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       try {
         const pmrem = new THREE.PMREMGenerator(G.R.renderer);
         const s = new THREE.Scene();
-        const g = new THREE.SphereGeometry(50, 16, 12);
-        const m = new THREE.MeshBasicMaterial({ color: 0x4d6076, side: THREE.BackSide });
-        s.add(new THREE.Mesh(g, m));
-        const light = new THREE.Mesh(new THREE.SphereGeometry(9, 8, 8), new THREE.MeshBasicMaterial({ color: 0xfff4e0 }));
-        light.position.set(18, 26, 14);
+        // 用渐变天空球代替纯色：玻璃反射出"天在上、地在下的真实环境"
+        const g = new THREE.SphereGeometry(50, 24, 16);
+        const skyMat = new THREE.ShaderMaterial({
+          side: THREE.BackSide, depthWrite: false,
+          uniforms: { top: { value: new THREE.Color(0x3d7ec0) }, hor: { value: new THREE.Color(0xd6e6f2) }, bot: { value: new THREE.Color(0x6b6459) } },
+          vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+          fragmentShader: 'varying vec3 vP; uniform vec3 top,hor,bot; void main(){ vec3 d=normalize(vP); float h=clamp(d.y,-1.0,1.0); vec3 c = h>0.0 ? mix(hor,top,pow(h,0.55)) : mix(hor,bot,pow(-h,0.6)); gl_FragColor=vec4(c,1.0); }'
+        });
+        s.add(new THREE.Mesh(g, skyMat));
+        // 太阳：一个高亮小面片，反射时形成窗上的高光点
+        const light = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 10), new THREE.MeshBasicMaterial({ color: 0xfff6e2 }));
+        light.position.set(20, 30, 12);
         s.add(light);
         const rt = pmrem.fromScene(s, 0.04);
         G.R.scene.environment = rt.texture;
@@ -7733,8 +7801,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         // 环境贴图只做轻微反射，避免整体发灰
         G.R.scene.traverse(o => {
           if (o.isMesh && o.material && o.material.isMeshStandardMaterial) {
-            const k = o.material.map === TEX.glass() || o.material.metalness > 0.6;
-            o.material.envMapIntensity = k ? 0.95 : 0.38;
+            const mm = o.material;
+            const isGlass = mm.map === TEX.glass() || mm.map === TEX.modern();
+            const k = isGlass || mm.metalness > 0.55;
+            mm.envMapIntensity = isGlass ? 1.35 : (mm.metalness > 0.55 ? 1.15 : 0.42);
             o.material.needsUpdate = true;
           }
         });
