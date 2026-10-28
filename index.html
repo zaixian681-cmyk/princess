@@ -313,6 +313,7 @@ window.addEventListener('error', function(e){
       <div class="obj-line"><span id="objPhoto">照片 0</span><span id="objPlace">地点 0</span></div>
       <div class="obj-line"><span id="objCard">明信片 0/24</span></div>
       <div class="obj-line"><span id="objMoment">惊喜 0/11</span></div>
+      <div class="obj-line"><span id="objStory">主线 1/5</span></div>
     </div>
   </div>
 
@@ -1406,7 +1407,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         }
         case 'talk': {
           o.idx = o.idx || 0;
-          const line = o.lines[o.idx % o.lines.length];
+          const lines = (typeof o.lines === 'function') ? o.lines() : o.lines;
+          const line = lines[o.idx % lines.length];
           o.idx++;
           UI && UI.readNote(o.name || '路人', line);
           A && A.sfx('chime');
@@ -3170,6 +3172,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     // 门口交互
     reg({ kind: 'door', x: cx, y: y0 + 1.2, z: cz + d / 2, label: '进入咖啡店', spawn: { x: cx, z: cz + d / 2 - 2.2 } });
     note(MB, cx + 9, y0 + 1.5, cz + 1.4, -Math.PI / 2, '「今日特调：蜂蜜柚子茶。给最可爱的客人打八折。」', '菜单');
+    clutter(MB, s.x0 + 1, s.z0 + 1, s.x1 - 1, s.z1 - 1, FLOOR, 16);
     info.top = y0 + h + 7.5;
     info.name = '暖阳咖啡馆';
   }
@@ -3252,6 +3255,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     reg({ kind: 'door', x: cx, y: y0 + 1.2, z: cz + d / 2, label: '进入便利店', spawn: { x: cx, z: cz + d / 2 - 2.0 } });
     reg({ kind: 'shop', x: cx + 5.2, y: y0 + 1.1, z: cz + 4.9, label: '购买热可可（¥12）', item: 'coffee', price: 12 });
     reg({ kind: 'shop', x: cx - 5.0, y: y0 + 1.0, z: cz + 5.3, label: '买一个甜甜圈（¥8）', item: 'donut', price: 8 });
+    clutter(MB, s.x0 + 1, s.z0 + 1, s.x1 - 1, s.z1 - 1, FLOOR, 18);
     info.top = y0 + h + 6.2;
     info.name = '星光便利店';
   }
@@ -3303,6 +3307,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     roof(MB, cx, cz, w, d, y0 + h * 2 + upperH, 0xc9bfb2);
     reg({ kind: 'door', x: cx, y: y0 + 1.2, z: cz + d / 2, label: '进入公寓楼', spawn: { x: cx, z: cz + d / 2 - 2.2 } });
     note(MB, cx + 4, y0 + 1.5, cz + 8.6, Math.PI, '「一楼的钥匙放在门口花盆下面，别忘了。」', '租客留言');
+    clutter(MB, s.x0 + 1, s.z0 + 1, s.x1 - 1, s.z1 - 1, FLOOR, 16);
+    clutter(MB, s.x0 + 1, s.z0 + 1, s.x1 - 1, s.z1 - 1, FLOOR + h, 14);
     info.top = y0 + h * 2 + 8.0;
     info.name = '梧桐公寓';
   }
@@ -3356,6 +3362,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     box(MB, 'metal', cx, y0 + h * 2 + upperH + 2, cz, 0.4, 4, 0.4, 0xd0d4da);
     reg({ kind: 'door', x: cx, y: y0 + 1.2, z: cz + d / 2, label: '进入写字楼', spawn: { x: cx, z: cz + d / 2 - 2.4 } });
     reg({ kind: 'note', x: cx + 6, y: y0 + 1.2, z: cz + 5.3, label: '查看前台', msg: '前台屏幕上滚动着一行字：「欢迎山雨辰小公主视察本大厦。」', title: '前台' });
+    clutter(MB, s.x0 + 1, s.z0 + 1, s.x1 - 1, s.z1 - 1, FLOOR, 14);
+    clutter(MB, s.x0 + 1, s.z0 + 1, s.x1 - 1, s.z1 - 1, FLOOR + h, 16);
     info.top = y0 + h * 2 + 13;
     info.name = '云顶大厦';
   }
@@ -3428,6 +3436,46 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     return gpr;
   }
 
+
+
+  /* 日常杂物：让房间有"住过人"的痕迹（全部合并进 MeshBuilder，几乎不增加 draw call） */
+  function clutter(MB, x0, z0, x1, z1, yb, n) {
+    if (x1 - x0 < 2 || z1 - z0 < 2) return;
+    const rnd = G.rand;
+    for (let i = 0; i < n; i++) {
+      const px = rnd(x0 + 0.8, x1 - 0.8), pz = rnd(z0 + 0.8, z1 - 0.8);
+      if (COL.pointSolid(px, yb + 0.45, pz)) continue;
+      const k = (Math.random() * 8) | 0;
+      if (k === 0) {
+        const c = [0xc0504e, 0x4e7ec0, 0xd8a24a, 0x4f8a66][(Math.random() * 4) | 0];
+        for (let b = 0; b < 3; b++) {
+          box(MB, 'wood', px + rnd(-0.03, 0.03), yb + 0.03 + b * 0.045, pz + rnd(-0.03, 0.03),
+            0.26 - b * 0.02, 0.04, 0.19, c, 1);
+        }
+      } else if (k === 1) {
+        box(MB, 'plaster', px, yb + 0.02, pz, 0.3, 0.03, 0.22, 0xe8e2d6, 1);
+        box(MB, 'plaster', px, yb + 0.09, pz, 0.09, 0.12, 0.09, 0xf6f2ea, 1);
+      } else if (k === 2) {
+        const c = [0xd8a3b8, 0x9fb6d6, 0xe6dcc8, 0xb8c8a8][(Math.random() * 4) | 0];
+        for (let b = 0; b < 2; b++) box(MB, 'plaster', px, yb + 0.02 + b * 0.06, pz, 0.34, 0.05, 0.26, c, 1);
+      } else if (k === 3) {
+        box(MB, 'plaster', px, yb + 0.05, pz, 0.22, 0.09, 0.13, 0xefeae0, 1);
+        box(MB, 'dark', px + 0.18, yb + 0.02, pz + 0.04, 0.16, 0.03, 0.05, 0x2a2d33, 1);
+      } else if (k === 4) {
+        box(MB, 'concrete', px, yb + 0.09, pz, 0.18, 0.18, 0.18, 0xd8d2c4, 1);
+        box(MB, 'leaf', px, yb + 0.28, pz, 0.26, 0.24, 0.26, 0x4f8a44, 1);
+      } else if (k === 5) {
+        box(MB, 'wood', px, yb + 0.13, pz, 0.42, 0.26, 0.34, 0xc8a878, 2);
+        box(MB, 'plaster', px, yb + 0.26, pz, 0.44, 0.01, 0.12, 0xe8dcc8, 1);
+      } else if (k === 6) {
+        box(MB, 'plaster', px, yb + 0.008, pz, 0.42, 0.012, 0.3, 0xefe9dc, 1);
+        box(MB, 'plaster', px + 0.02, yb + 0.012, pz + 0.32, 0.4, 0.011, 0.3, 0xefe9dc, 1);
+      } else {
+        box(MB, 'plaster', px, yb + 0.03, pz, 0.12, 0.05, 0.26, 0xb9a4b0, 1);
+        box(MB, 'plaster', px + 0.2, yb + 0.03, pz, 0.12, 0.05, 0.26, 0xb9a4b0, 1);
+      }
+    }
+  }
 
   /* 二层栏杆：沿楼层四周加一圈半高护栏，防止从楼上直接走出去 */
   function upperRail(MB, x0, z0, x1, z1, y, key, color) {
@@ -3568,6 +3616,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     reg({ kind: 'note', x: cx - 6, y: y0 + h + 1.6, z: cz - 9.1, label: '查看相框', msg: '照片里是江边的夜景，玻璃上倒映着两个人影。', title: '相框' });
     reg({ kind: 'camera', x: cx, y: y0 + h + 1.4, z: bz1 - 1.2, label: '在阳台看风景' });
     reg({ kind: 'lightswitch', x: cx + 12.0, y: y0 + 1.4, z: cz + 8, label: '开关全屋灯光' });
+    clutter(MB, s.x0 + 1, s.z0 + 1, s.x1 - 1, s.z1 - 1, FLOOR, 18);
+    clutter(MB, s.x0 + 1, s.z0 + 1, s.x1 - 1, s.z1 - 1, FLOOR + h, 14);
     info.top = y0 + h * 2 + 6.0;
     info.name = '公主的专属公寓';
     info.home = true;
@@ -3610,6 +3660,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     // 顶层
     slab(MB, x0, z0, x1, z1, y0 + h * 2, 0.3, 'concrete', 0x9c988f);
     box(MB, 'concrete', cx, y0 + h * 2 + 0.7, z1, w, 1.0, 0.3, 0xb8b4ab);
+    clutter(MB, s.x0 + 1, s.z0 + 1, s.x1 - 1, s.z1 - 1, FLOOR, 10);
     info.top = y0 + h + 4.0;
     info.name = '城市停车楼';
     info.parking = true;
@@ -4879,6 +4930,33 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const target = base * (night > 0.5 ? 0.7 : 1) * 0.35;
       this.ambGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.8);
       this.ambFilter.frequency.setTargetAtTime(zone === 'park' ? 900 : 380, this.ctx.currentTime, 0.8);
+    },
+
+    /* 环境声音分层：风 / 江水 / 雨 / 室内闷 */
+    setLayers(o) {
+      if (!this.ready) return;
+      if (!this._lay) {
+        const ctx = this.ctx, len = Math.floor(ctx.sampleRate * 2);
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        const mk = (freq, type, q) => {
+          const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+          const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+          if (q) f.Q.value = q;
+          const g = ctx.createGain(); g.gain.value = 0;
+          src.connect(f); f.connect(g); g.connect(this.master);
+          try { src.start(); } catch (e) {}
+          return { src, f, g };
+        };
+        this._lay = { wind: mk(420, 'lowpass'), water: mk(760, 'bandpass', 0.7), rain: mk(2200, 'highpass') };
+      }
+      const t = this.ctx.currentTime, L = this._lay;
+      L.wind.g.gain.setTargetAtTime(o.indoor ? 0.008 : 0.042, t, 0.9);
+      L.water.g.gain.setTargetAtTime(o.river ? 0.055 : 0, t, 1.4);
+      L.rain.g.gain.setTargetAtTime((o.rain || 0) * 0.085, t, 0.5);
+      // 进屋以后主环境音闷下来
+      if (this.ambFilter) this.ambFilter.frequency.setTargetAtTime(o.indoor ? 260 : 620, t, 0.7);
     },
 
     tone(freq, dur, type, gain, slideTo) {
@@ -6213,6 +6291,106 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
 </script>
 <script>
+/* story.js —— 主线：在城市里过完这一天的五个阶段 */
+(function (global) {
+  'use strict';
+  const G = global.G;
+  if (!G) return;
+
+  const S = G.Story = {
+    stage: 0, done: {}, t: 0,
+    steps: [
+      {
+        id: 'key', goal: '去公寓门口找到那把黄铜钥匙',
+        hint: '梧桐公寓在城西，门口台阶旁边有个小东西在发光',
+        check() { return G.Inv && G.Inv.count('key') > 0; },
+        done: '拿到钥匙了 · 公寓在城西，进去看看二楼'
+      },
+      {
+        id: 'home', goal: '上梧桐公寓二楼，看看窗边留下的字条',
+        hint: '从一楼楼梯上去，二楼东侧是起居室',
+        check() {
+          const a = G.W.enterables && G.W.enterables.apartment, P = G.Player;
+          return !!(a && P && P.pos.y > 3.2 && P.pos.x > a.x0 && P.pos.x < a.x1 && P.pos.z > a.z0 && P.pos.z < a.z1);
+        },
+        done: '二楼看到的整座城市，比想象中温柔'
+      },
+      {
+        id: 'coffee', goal: '去暖阳咖啡馆，替两个人点一杯热可可',
+        hint: '咖啡馆在城北商业街，靠窗那张桌子上摆着两杯',
+        check() { return G.Inv && G.Inv.count('coffee') > 0; },
+        done: '热可可拿到手了 · 她说过喜欢不太甜的'
+      },
+      {
+        id: 'office', goal: '上云顶大厦二层，看看那面玻璃墙外的城市',
+        hint: '写字楼在城市东北，楼梯在左手边，二层有一张小玻璃桌',
+        check() {
+          const o = G.W.enterables && G.W.enterables.office, P = G.Player;
+          return !!(o && P && P.pos.y > 4.2 && P.pos.x > o.x0 && P.pos.x < o.x1 && P.pos.z > o.z0 && P.pos.z < o.z1);
+        },
+        done: '站在二楼往下看，城市真的在替人说话'
+      },
+      {
+        id: 'sunset', goal: '傍晚去滨江步道，等一场日落',
+        hint: '时间到 17 点以后再去，江边西南方向视野最好',
+        check() {
+          const d = G.W.viewDeck, P = G.Player, h = G.Time ? G.Time.hour : 12;
+          return !!(d && P && h >= 17 && Math.hypot(P.pos.x - d.x, P.pos.z - d.z) < 90);
+        },
+        done: '日落看到了 · 天暗下来以后，观景台还有一件事'
+      },
+      {
+        id: 'story', goal: '夜里去滨江观景台，把这一天讲完',
+        hint: '集齐城里的惊喜之后，观景台会自动开始结局',
+        check() {
+          return !!(G.Moments && G.Moments.finaleStarted);
+        },
+        done: '这一天过完了'
+      }
+    ],
+
+    init() {
+      if (G.Save && G.Save.data && G.Save.data.story) {
+        this.stage = G.Save.data.story.stage || 0;
+      }
+      this.updateHud();
+    },
+
+    cur() { return this.steps[Math.min(this.stage, this.steps.length - 1)]; },
+
+    update(dt) {
+      this.t += dt;
+      if (this.t < 0.5) return;
+      this.t = 0;
+      const st = this.cur();
+      if (!st || this.stage >= this.steps.length) return;
+      let ok = false;
+      try { ok = !!st.check(); } catch (e) { ok = false; }
+      if (!ok) return;
+      this.stage++;
+      this.done[st.id] = 1;
+      if (G.Save && G.Save.data) G.Save.data.story = { stage: this.stage };
+      G.Audio && G.Audio.sfx('chime');
+      if (G.UI) {
+        G.UI.toast('主线推进 · ' + (st.done || '继续'), 3200);
+        const nx = this.cur();
+        if (nx && this.stage < this.steps.length) setTimeout(() => G.UI.hint('下一步：' + nx.goal, 5200), 1200);
+      }
+      this.updateHud();
+    },
+
+    updateHud() {
+      const el = typeof document !== 'undefined' && document.getElementById('objStory');
+      if (!el) return;
+      if (this.stage >= this.steps.length) { el.textContent = '主线 已完成'; return; }
+      const st = this.cur();
+      el.textContent = '主线 ' + (this.stage + 1) + '/5 · ' + st.goal;
+    }
+  };
+})(window);
+
+</script>
+<script>
 /* moments.js —— 建筑内的情侣惊喜 / 浪漫粒子 / 小玩法 */
 (function (global) {
   'use strict';
@@ -6875,7 +7053,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 236;
+  G.BUILD = 237;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
@@ -7051,8 +7229,64 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         '「常来啊，热可可永远给你留着。」'
       ]);
 
+      // —— 街上的可对话路人（每个地标一个，台词各不相同）
+      const more = [
+        ['扫街的清洁工阿姨', 0xd8a15a, bcx(2) + 12, bcz(2) - 4, Math.PI * 0.8, [
+          '「这条街我扫了十年，最干净的时候是凌晨四点。」',
+          '「前面广场那对天天来喂鸽子。」',
+          '「姑娘慢点走，地滑。」']],
+        ['公园里下棋的老爷子', 0x9aa8b8, bcx(0) - 10, bcz(3) - 2, Math.PI * 0.3, [
+          '「下棋要留退路，找人不用。」',
+          '「我老伴儿年轻的时候也嫌这公园小。」',
+          '「你看这棵树，比我孙子都高了。」']],
+        ['江边钓鱼的大叔', 0x7fa8c8, (G.W.viewDeck ? G.W.viewDeck.x : bcx(2)) - 14, (G.W.viewDeck ? G.W.viewDeck.z : bcz(5)) + 2, Math.PI * 0.5, [
+          '「钓不上来也不碍事，坐着舒服。」',
+          '「日落那会儿鱼最闹，也最咬钩。」',
+          '「你俩要拍照就站那边，逆光好看。」']],
+        ['便利店的夜班店员', 0xffc9a0, (G.W.enterables.store ? (G.W.enterables.store.x0 + G.W.enterables.store.x1) / 2 + 7 : bcx(1)), (G.W.enterables.store ? G.W.enterables.store.z1 + 3 : bcz(3)), Math.PI, [
+          '「凌晨三点最安静，只有冰柜在响。」',
+          '「关东煮一直热着，谁进来都能吃口热的。」',
+          '「这条街上的人，我大部分都认得。」']],
+        ['花摊的姑娘', 0xe89aa8, bcx(2) - 12, bcz(0) + 6, Math.PI * 0.2, [
+          '「玫瑰今天只剩五支，都被人订了。」',
+          '「送花不用挑日子，想送的时候就是日子。」',
+          '「这束要不要包一下？不收钱。」']],
+        ['写字楼的门房', 0x8f959d, (G.W.enterables.office ? (G.W.enterables.office.x0 + G.W.enterables.office.x1) / 2 + 9 : bcx(3)), (G.W.enterables.office ? G.W.enterables.office.z1 + 3 : bcz(1)), Math.PI, [
+          '「顶层视野好，就是电梯老排队。」',
+          '「二层那面玻璃墙，很多人上来就为看一眼。」',
+          '「快递我帮您收着，回来拿。」']],
+        ['公交站等车的学生', 0xb8c8e8, bcx(1) - 16, bcz(1) + 14, Math.PI * 0.6, [
+          '「7 路总是晚点，但从来不会不来。」',
+          '「我每天坐它去上学，坐了三年。」',
+          '「你要去江边的话，坐三站就到。」']],
+        ['公寓楼下的快递小哥', 0xf0c05a, (G.W.enterables.apartment ? (G.W.enterables.apartment.x0 + G.W.enterables.apartment.x1) / 2 + 8 : bcx(1)), (G.W.enterables.apartment ? G.W.enterables.apartment.z1 + 3 : bcz(1)), Math.PI * 0.9, [
+          '「这一栋我一天要跑八趟。」',
+          '「304 那家门口总放着一双小拖鞋。」',
+          '「双十一之前别买太多，真的扛不动。」']],
+        ['停车楼浇花的大爷', 0x9fc8a8, (G.W.enterables.garage ? (G.W.enterables.garage.x0 + G.W.enterables.garage.x1) / 2 - 8 : bcx(4)), (G.W.enterables.garage ? (G.W.enterables.garage.z0 + G.W.enterables.garage.z1) / 2 : bcz(4)), Math.PI * 0.4, [
+          '「顶楼风大，晚上能看见星星。」',
+          '「车停这儿放心，我每天转三圈。」',
+          '「年轻人喜欢上天台，我提醒一句小心。」']]
+      ];
+      more.forEach(m => this.addNPC(S, m[2], m[3], m[4], m[0], m[1], m[5]));
+
+      // 两个跟着主线进度换台词的人
+      this.addNPC(S, bcx(2) - 4, bcz(2) + 8, Math.PI * 1.1, '广场上遛狗的小姐姐', 0xc8a8d8, () => {
+        const st = G.Story ? G.Story.stage : 0;
+        if (st <= 1) return ['「它叫豆浆，特别亲人，你摸摸看。」', '「今天风大，你别走太远。」'];
+        if (st <= 3) return ['「刚才好像看见你从写字楼那边过来？」', '「豆浆说它想再去江边。」'];
+        return ['「天快黑了，江边的日落记得去看。」', '「豆浆怕水，你别带它下水。」'];
+      });
+      this.addNPC(S, (G.W.enterables.princess ? (G.W.enterables.princess.x0 + G.W.enterables.princess.x1) / 2 - 9 : bcx(4)), (G.W.enterables.princess ? G.W.enterables.princess.z1 + 4 : bcz(4)), Math.PI, '公主公寓的管家', 0xd8c8b8, () => {
+        const n = G.Moments ? Object.keys(G.Moments.found).filter(k => k !== '__finale').length : 0;
+        const st = G.Story ? G.Story.stage : 0;
+        if (st >= 4) return ['「小姐在楼上等您，说今天一定要一起看日落。」', '「灯我已经都开好了。」'];
+        return ['「小姐吩咐过，您随时可以上去。」', '「(他小声说) 这城里一共有 ' + (G.Moments ? G.Moments.total : 11) + ' 处小惊喜，您已经找到 ' + n + ' 处了。」'];
+      });
+
       // —— 每栋建筑里的情侣小惊喜
       if (G.Moments) G.Moments.build(this);
+      if (G.Story) G.Story.init();
     },
 
     addNPC(scene, x, z, yaw, name, color, lines) {
@@ -7235,6 +7469,23 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
       // 浪漫粒子 / 惊喜动画
       if (G.Moments) G.Moments.update(dt);
+      // 主线推进
+      if (G.Story) G.Story.update(dt);
+      // 声音分层：室外风、江边水声、雨声、进屋闷下来
+      if (G.Audio && G.Audio.ready) {
+        this._layT = (this._layT || 0) + dt;
+        if (this._layT > 0.35) {
+          this._layT = 0;
+          const deck = G.W.viewDeck;
+          const riverD = deck ? Math.hypot(P.pos.x - deck.x, P.pos.z - deck.z) : 999;
+          G.Audio.setLayers({
+            indoor: !!P.indoor,
+            rain: G.rainFactor || 0,
+            river: !P.indoor && riverD < 55,
+            night: G.nightFactor || 0
+          });
+        }
+      }
 
       if (this.clouds) {
         const t = this.time * 0.004;
