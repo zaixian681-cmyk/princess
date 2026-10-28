@@ -295,6 +295,7 @@ window.addEventListener('error', function(e){
       <div class="obj-line"><span id="objClue">留言 0/6</span><span id="objFlower">小花 0/12</span></div>
       <div class="obj-line"><span id="objPhoto">照片 0</span><span id="objPlace">地点 0</span></div>
       <div class="obj-line"><span id="objCard">明信片 0/24</span></div>
+      <div class="obj-line"><span id="objMoment">惊喜 0/7</span></div>
     </div>
   </div>
 
@@ -1379,6 +1380,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           break;
         }
       }
+      if (o.onUse) o.onUse(o);
       o.used = true;
     },
     stand() {
@@ -2736,7 +2738,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const w = (dir === 'e' || dir === 'w') ? run * 1.7 : width;
       const d = (dir === 'e' || dir === 'w') ? width : run * 1.7;
       box(MB, key, px, sy - 0.14, pz, w, 0.28, d, color, 3);
-      col(px, pz, w, d, sy - y0, y0, 'stair');
+      // 碰撞体只占一级的进深（不再 1.7 倍重叠），否则后面的高台阶会顶住玩家
+      const cw = (dir === 'e' || dir === 'w') ? run * 1.02 : width * 0.98;
+      const cd = (dir === 'e' || dir === 'w') ? width * 0.98 : run * 1.02;
+      col(px, pz, cw, cd, sy - y0, y0, 'stair');
     }
   }
 
@@ -2762,22 +2767,24 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     col(x, z, w, 0.95, 0.85, FLOOR, 'sofa');
     reg({ kind: 'sit', x, y: FLOOR + 0.45, z, label: '坐下', rot, seat: { y: 0.45 } });
   }
-  function table(MB, x, z, w, d, h) {
+  function table(MB, x, z, w, d, h, yb) {
     h = h || 0.75;
-    box(MB, 'wood', x, FLOOR + h, z, w, 0.08, d, 0x9c7148);
+    const B = (yb === undefined ? FLOOR : yb);
+    box(MB, 'wood', x, B + h, z, w, 0.08, d, 0x9c7148);
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-      box(MB, 'wood', x + sx * (w / 2 - 0.12), FLOOR + h / 2, z + sz * (d / 2 - 0.12), 0.09, h, 0.09, 0x855c38);
+      box(MB, 'wood', x + sx * (w / 2 - 0.12), B + h / 2, z + sz * (d / 2 - 0.12), 0.09, h, 0.09, 0x855c38);
     }
-    col(x, z, w, d, h, FLOOR, 'table');
+    col(x, z, w, d, h, B, 'table');
   }
-  function chair(MB, x, z, rot) {
+  function chair(MB, x, z, rot, yb) {
     const c = Math.cos(rot), s = Math.sin(rot);
-    box(MB, 'wood', x, FLOOR + 0.45, z, 0.5, 0.08, 0.5, 0xb08050);
-    box(MB, 'wood', x - s * 0.22, FLOOR + 0.72, z - c * 0.22, 0.5, 0.55, 0.08, 0xb08050);
+    const B = (yb === undefined ? FLOOR : yb);
+    box(MB, 'wood', x, B + 0.45, z, 0.5, 0.08, 0.5, 0xb08050);
+    box(MB, 'wood', x - s * 0.22, B + 0.72, z - c * 0.22, 0.5, 0.55, 0.08, 0xb08050);
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-      box(MB, 'metal', x + sx * 0.19, FLOOR + 0.22, z + sz * 0.19, 0.06, 0.45, 0.06, 0x8b9098);
+      box(MB, 'metal', x + sx * 0.19, B + 0.22, z + sz * 0.19, 0.06, 0.45, 0.06, 0x8b9098);
     }
-    reg({ kind: 'sit', x, y: FLOOR + 0.5, z, label: '坐下', rot, seat: { y: 0.46 } });
+    reg({ kind: 'sit', x, y: B + 0.5, z, label: '坐下', rot, seat: { y: 0.46 } });
   }
   function counter(MB, x, z, w, d, h, color) {
     box(MB, 'concrete', x, FLOOR + (h || 1.05) / 2, z, w, h || 1.05, d, color || 0xd9d3c6);
@@ -3021,7 +3028,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     info.x0 = s.x0; info.x1 = s.x1; info.z0 = s.z0; info.z1 = s.z1;
     info.door = { x: cx, z: cz + d / 2 };
     slab(MB, s.x0, s.z0, s.x1, s.z1, y0, 0.2, 'wood', 0xa07a54);
-    slabHole(MB, s.x0, s.z0, s.x1, s.z1, y0 + h, 0.25, 'plaster', 0xefe9df, { hx0: cx + 6, hz0: cz - 8, hx1: cx + 11, hz1: cz - 3 });
+    slabHole(MB, s.x0, s.z0, s.x1, s.z1, y0 + h, 0.25, 'plaster', 0xefe9df, { hx0: cx + 5.2, hz0: cz - 2.8, hx1: cx + 7.7, hz1: cz + 3.76 });
     // 隔墙：客厅 / 卧室 / 厨房
     vWall(MB, cz - 9, cz + 9, cx + 3, y0, h, 0.25, 'plaster', 0xf2ede3, [{ a: cz - 2, b: cz + 0.6 }]);
     hWall(MB, cx + 3, cx + 11, cz - 9, y0, h, 0.25, 'plaster', 0xf2ede3, [{ a: cx + 6.5, b: cx + 8.5 }]);
@@ -3042,11 +3049,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     box(MB, 'wood', cx + 10.6, y0 + 0.9, cz - 8.5, 1.2, 1.8, 0.6, 0x8a6544);
     // 楼梯到 2 楼
     stairs(MB, cx + 6.4, cz - 2.0, 's', y0, y0 + h, 1.6, 'concrete', 0xc8c4ba);
+    upperRail(MB, s.x0 + 0.3, s.z0 + 0.3, s.x1 - 0.3, s.z1 - 0.3, y0 + h, 'plaster', 0xf2ede3);
     // 2 楼（小起居室）
     vWall(MB, cz - 9, cz + 9, cx - 1, y0 + h, h, 0.25, 'plaster', 0xf2ede3, [{ a: cz - 1, b: cz + 1.6 }]);
     sofa(MB, cx - 5, cz - 4, 2.6, Math.PI / 2);
     table(MB, cx - 3.4, cz - 4, 1.0, 1.0, 0.45);
-    bed(MB, cx + 6, cz + 4, 0);
+    bed(MB, cx + 8.6, cz + 6.2, 0);
+    rug(MB, cx + 6.5, cz - 5.5, 3.4, 3.0, 0xd9c8e2);
+    shelf(MB, cx + 11.4, cz + 1.5, 2.4, Math.PI / 2, 1.8);
+    plantPot(MB, cx + 1.6, cz + 8.2);
     ceilingLamp(MB, cx - 4, cz + 2, y0 + h - 0.3, scene);
     ceilingLamp(MB, cx + 7, cz - 6, y0 + h - 0.3, scene, 0xffe0b0);
     ceilingLamp(MB, cx - 2, cz - 4, y0 + h * 2 - 0.3, scene);
@@ -3066,7 +3077,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     info.x0 = s.x0; info.x1 = s.x1; info.z0 = s.z0; info.z1 = s.z1;
     info.door = { x: cx, z: cz + d / 2 };
     slab(MB, s.x0, s.z0, s.x1, s.z1, y0, 0.2, 'tile', 0xdde3e6);
-    slabHole(MB, s.x0, s.z0, s.x1, s.z1, y0 + h, 0.25, 'plaster', 0xeef1f2, { hx0: cx - 10, hz0: cz + 2, hx1: cx - 5, hz1: cz + 7 });
+    slabHole(MB, s.x0, s.z0, s.x1, s.z1, y0 + h, 0.25, 'plaster', 0xeef1f2, { hx0: cx - 8.4, hz0: cz + 1.7, hx1: cx - 1.75, hz1: cz + 4.3 });
     // 大堂
     counter(MB, cx + 6, cz + 6, 6, 1.2, 1.1, 0xd0d6da);
     box(MB, 'glass', cx + 6, y0 + 1.6, cz + 6.0, 6, 1.0, 0.06, 0xbfe3f0);
@@ -3086,13 +3097,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     ceilingLamp(MB, cx - 3, cz + 5, y0 + h - 0.3, scene, 0xe8f2ff);
     // 楼梯
     stairs(MB, cx - 7.5, cz + 3.0, 'e', y0, y0 + h, 1.8, 'concrete', 0xcfd4d8);
+    upperRail(MB, s.x0 + 0.3, s.z0 + 0.3, s.x1 - 0.3, s.z1 - 0.3, y0 + h, 'glass', 0xbfe3f0);
     // 2 楼办公层
     vWall(MB, cz - 10, cz + 10, cx + 2, y0 + h, h, 0.2, 'plaster', 0xeef1f2, [{ a: cz - 1, b: cz + 1.6 }]);
+    const F2 = y0 + h;                       // 二层地面
     for (let i = 0; i < 3; i++) {
-      table(MB, cx - 7 + i * 4.2, cz - 5, 2.0, 1.0, 0.74);
-      box(MB, 'dark', cx - 7 + i * 4.2, y0 + h + 1.15, cz - 5.3, 0.8, 0.5, 0.06, 0x2b3036);
+      const dx = cx - 7 + i * 4.2;
+      table(MB, dx, cz - 5, 2.0, 1.0, 0.74, F2);
+      box(MB, 'dark', dx, F2 + 1.15, cz - 5.3, 0.8, 0.5, 0.06, 0x2b3036);
+      chair(MB, dx, cz - 4.0, Math.PI, F2);
     }
-    table(MB, cx - 3, cz + 6, 4.0, 1.8, 0.76);
+    table(MB, cx - 3, cz + 6, 4.0, 1.8, 0.76, F2);
+    for (let i = 0; i < 3; i++) chair(MB, cx - 4.6 + i * 1.6, cz + 4.7, 0, F2);
     ceilingLamp(MB, cx - 3, cz - 2, y0 + h * 2 - 0.3, scene, 0xe8f2ff);
     ceilingLamp(MB, cx - 4, cz + 6, y0 + h * 2 - 0.3, scene, 0xe8f2ff);
     // 上部楼体
@@ -3106,13 +3122,99 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     info.name = '云顶大厦';
   }
 
+
+  /* ---------- 屋顶立体招牌（canvas 贴图 + 灯箱发光） ---------- */
+  function roofSign(scene, x, y, z, text, opts) {
+    opts = opts || {};
+    const w = opts.w || 14, hh = opts.h || 2.7, stand = opts.stand || 3.4;
+    const cv = document.createElement('canvas');
+    cv.width = 1024; cv.height = 192;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#150d14'; g.fillRect(0, 0, 1024, 192);
+    const lg = g.createLinearGradient(0, 0, 1024, 0);
+    lg.addColorStop(0, 'rgba(255,157,196,.16)');
+    lg.addColorStop(.5, 'rgba(255,170,205,.46)');
+    lg.addColorStop(1, 'rgba(255,157,196,.16)');
+    g.fillStyle = lg; g.fillRect(0, 0, 1024, 192);
+    g.strokeStyle = 'rgba(255,196,220,.95)'; g.lineWidth = 7; g.strokeRect(9, 9, 1006, 174);
+    g.fillStyle = '#ffffff';
+    g.font = 'bold 112px "PingFang SC","Noto Sans CJK SC","Hiragino Sans GB",sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.shadowColor = '#ff9dc4'; g.shadowBlur = 36;
+    g.fillText(text, 512, 100);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+
+    const gpr = new THREE.Group();
+    gpr.position.set(x, y, z);
+    // 背面灯箱
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.5, hh + 0.42, 0.34),
+      new THREE.MeshStandardMaterial({ color: 0x2a2730, roughness: .55, metalness: .45 }));
+    frame.position.y = stand + hh / 2;
+    frame.castShadow = true;
+    // 正面发光板
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(w, hh),
+      new THREE.MeshStandardMaterial({
+        map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: opts.glow || 1.15,
+        roughness: .5, metalness: .05, toneMapped: false
+      }));
+    face.position.set(0, stand + hh / 2, 0.19);
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(w, hh),
+      new THREE.MeshStandardMaterial({ color: 0x241f28, roughness: .8 }));
+    back.position.set(0, stand + hh / 2, -0.19); back.rotation.y = Math.PI;
+    gpr.add(frame, face, back);
+    // 支架
+    for (const sx of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, stand + hh * 0.5, 0.3),
+        new THREE.MeshStandardMaterial({ color: 0x9aa0a8, roughness: .5, metalness: .7 }));
+      post.position.set(sx * w * 0.34, (stand + hh * 0.5) / 2, 0);
+      post.castShadow = true;
+      gpr.add(post);
+      // 斜撑
+      const br = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.1, 0.16),
+        new THREE.MeshStandardMaterial({ color: 0x8f959d, roughness: .6, metalness: .6 }));
+      br.position.set(sx * w * 0.34, stand * 0.55, 0.32);
+      br.rotation.x = 0.5;
+      gpr.add(br);
+    }
+    // 底部小灯
+    for (let i = -2; i <= 2; i++) {
+      const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.1),
+        new THREE.MeshStandardMaterial({ color: 0xffe0ee, emissive: 0xffb3d0, emissiveIntensity: 2.4, toneMapped: false }));
+      bulb.position.set(i * (w * 0.17), stand - 0.12, 0.24);
+      gpr.add(bulb);
+    }
+    scene.add(gpr);
+    return gpr;
+  }
+
+
+  /* 二层栏杆：沿楼层四周加一圈半高护栏，防止从楼上直接走出去 */
+  function upperRail(MB, x0, z0, x1, z1, y, key, color) {
+    const t = 0.16, hh = 0.95;
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, w = x1 - x0, d = z1 - z0;
+    box(MB, key, cx, y + hh / 2, z0, w, hh, t, color, 2);
+    col(cx, z0, w, t, hh, y, 'rail');
+    box(MB, key, cx, y + hh / 2, z1, w, hh, t, color, 2);
+    col(cx, z1, w, t, hh, y, 'rail');
+    box(MB, key, x0, y + hh / 2, cz, t, hh, d, color, 2);
+    col(x0, cz, t, d, hh, y, 'rail');
+    box(MB, key, x1, y + hh / 2, cz, t, hh, d, color, 2);
+    col(x1, cz, t, d, hh, y, 'rail');
+    // 扶手
+    box(MB, 'metal', cx, y + hh + 0.04, z0, w, 0.08, 0.22, 0xd2d8de, 2);
+    box(MB, 'metal', cx, y + hh + 0.04, z1, w, 0.08, 0.22, 0xd2d8de, 2);
+    box(MB, 'metal', x0, y + hh + 0.04, cz, 0.22, 0.08, d, 0xd2d8de, 2);
+    box(MB, 'metal', x1, y + hh + 0.04, cz, 0.22, 0.08, d, 0xd2d8de, 2);
+  }
+
   function buildPrincess(MB, scene, cx, cz, info) {
     const w = 26, d = 22, h = 3.4, y0 = FLOOR;
     const s = shell(MB, cx, cz, w, d, y0, h, 'plaster', 0xf7f0e8, cx, 3.0);
     info.x0 = s.x0; info.x1 = s.x1; info.z0 = s.z0; info.z1 = s.z1;
     info.door = { x: cx, z: cz + d / 2 };
     slab(MB, s.x0, s.z0, s.x1, s.z1, y0, 0.2, 'wood', 0xc09a72);
-    slabHole(MB, s.x0, s.z0, s.x1, s.z1, y0 + h, 0.22, 'wood', 0xe6d3b8, { hx0: cx + 5, hz0: cz - 9, hx1: cx + 10, hz1: cz - 4 });
+    slabHole(MB, s.x0, s.z0, s.x1, s.z1, y0 + h, 0.22, 'wood', 0xe6d3b8, { hx0: cx + 4.4, hz0: cz - 3.8, hx1: cx + 6.8, hz1: cz + 2.76 });
     // 踢脚线
     box(MB, 'wood', cx, y0 + 0.12, s.z0 + 0.28, w - 1.0, 0.24, 0.08, 0xc9a97f, 2);
     box(MB, 'wood', cx, y0 + 0.12, s.z1 - 0.28, w - 1.0, 0.24, 0.08, 0xc9a97f, 2);
@@ -3146,6 +3248,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     chair(MB, cx + 6, cz + 4.3, Math.PI); chair(MB, cx + 6, cz + 1.7, 0);
     // 楼梯
     stairs(MB, cx + 5.6, cz - 3.0, 's', y0, y0 + h, 1.7, 'wood', 0xb98d62);
+    upperRail(MB, s.x0 + 0.3, s.z0 + 0.3, s.x1 - 0.3, s.z1 - 0.3, y0 + h, 'wood', 0xc9a97f);
     // —— 二层：卧室 + 阳台 ——
     vWall(MB, cz - 9, cz + 9, cx - 2, y0 + h, h, 0.25, 'plaster', 0xf6efe7, [{ a: cz - 1, b: cz + 1.8 }]);
     bed(MB, cx + 6.0, cz - 6.5, 0);
@@ -3182,6 +3285,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     box(MB, 'modern', cx, y0 + h * 2 + upperH / 2, cz, w, upperH, d, 0xf2ece6, 6);
     col(cx, cz, w, d, upperH, y0 + h * 2, 'upper');
     roof(MB, cx, cz, w, d, y0 + h * 2 + upperH, 0xd8d2c8);
+    // 屋顶招牌：山雨辰公主大厦
+    roofSign(scene, cx, y0 + h * 2 + upperH, cz + d / 2 - 3.2, '山雨辰公主大厦', { w: 15, h: 2.8, stand: 3.2 });
     // 门（可开关）
     const panel = new THREE.Mesh(new THREE.BoxGeometry(2.9, 2.6, 0.12),
       new THREE.MeshStandardMaterial({ color: 0xe8d5c4, roughness: .5, metalness: .1 }));
@@ -3551,7 +3656,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         let d = want - this.yaw;
         while (d > Math.PI) d -= Math.PI * 2;
         while (d < -Math.PI) d += Math.PI * 2;
-        this.yaw += d * Math.min(1, dt * (this.running ? 14 : 11));
+        const stepYaw = d * Math.min(1, dt * (this.running ? 14 : 11));
+        this.yaw += stepYaw;
+        this.turnRate = stepYaw / Math.max(dt, 0.0001);      // 供倾身动画使用
+      } else {
+        this.turnRate = (this.turnRate || 0) * 0.82;
       }
 
       this.root.position.copy(this.pos);
@@ -3562,79 +3671,148 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
     animate(dt) {
       const sp = this.speed;
-      const walkRun = this.running ? 1 : 0;
-      this.movePhase += dt * (3.2 + sp * 1.15) * (sp > 0.15 ? 1 : 0);
+      const A = this.anim || (this.anim = {
+        legL: 0, legR: 0, armL: 0, armR: 0, armLz: 0.1, armRz: -0.1,
+        bodyY: 0, tiltX: 0, headX: 0, headY: 0, gait: 0, lean: 0, land: 0, air: 0, fallV: 0
+      });
+      const g0 = G;
+
+      /* —— 落地缓冲：空中记录下落速度，着地那一刻转成 squash —— */
+      if (!this.onGround) { A.air += dt; A.fallV = this.vel.y; }
+      else {
+        if (A.air > 0.08 && A.fallV < -3.2) A.land = g0.clamp((-A.fallV - 2.4) / 6.5, 0, 1);
+        A.air = 0;
+      }
+      A.land = Math.max(0, A.land - dt * 4.6);
+      const land = A.land * A.land;
+
+      /* —— 步态相位 —— */
+      const moving = sp > 0.15;
+      if (moving) this.movePhase += dt * (3.2 + sp * 1.15);
       const ph = this.movePhase;
-      const sw = Math.min(sp / 3.6, 1.6);
+      const runW = A.gait > 1 ? Math.min(1, (A.gait - 1) / 0.28) : 0;
+
+      let tLegL = 0, tLegR = 0, tArmL = 0, tArmR = 0, tArmLz = 0.1, tArmRz = -0.1;
+      let tBodyY = 0, tTiltX = 0, tHeadX = 0, tHeadY = 0, tLeanZ = 0;
+      let k = 12;
 
       if (!this.onGround) {
-        // 空中姿态
-        const t = G.clamp(this.vel.y * 0.08, -1, 1);
-        this.legL.rotation.x = 0.5 - t * 0.2;
-        this.legR.rotation.x = -0.25 + t * 0.15;
-        this.armL.rotation.x = -2.1 + t * 0.3;
-        this.armR.rotation.x = -2.1 + t * 0.3;
-        this.armL.rotation.z = 0.5; this.armR.rotation.z = -0.5;
-        this.body.position.y = 0;
-        this.head.rotation.x = -t * 0.12;
+        /* 空中：上升团身 / 下落伸腿准备着陆 */
+        const v = g0.clamp(this.vel.y * 0.09, -1, 1);
+        const prep = g0.clamp(-this.vel.y / 13, 0, 1);
+        tLegL = 0.55 - v * 0.25 + prep * 0.38;
+        tLegR = -0.22 + v * 0.18 + prep * 0.14;
+        tArmL = -2.0 + v * 0.35 - prep * 0.45;
+        tArmR = -2.0 + v * 0.35 - prep * 0.45;
+        tArmLz = 0.5; tArmRz = -0.5;
+        tHeadX = -v * 0.12 - prep * 0.06;
+        tTiltX = 0.03 - v * 0.05;
+        A.gait = g0.damp(A.gait, 0, 6, dt);
+        k = 10;
         this.state = 'jump';
       } else if (this.sitting) {
-        this.legL.rotation.x = -1.5; this.legR.rotation.x = -1.5;
-        this.armL.rotation.x = -0.35; this.armR.rotation.x = -0.35;
-        this.armL.rotation.z = 0.15; this.armR.rotation.z = -0.15;
-        this.body.position.y = -0.42;
-        this.head.rotation.x = 0;
+        tLegL = -1.5; tLegR = -1.5;
+        tArmL = -0.35; tArmR = -0.35;
+        tArmLz = 0.15; tArmRz = -0.15;
+        tBodyY = -0.42;
+        A.gait = g0.damp(A.gait, 0, 8, dt);
         this.state = 'sit';
       } else if (this.crouch) {
-        this.legL.rotation.x = -0.9 + Math.sin(ph * 2) * 0.25 * sw;
-        this.legR.rotation.x = -0.9 - Math.sin(ph * 2) * 0.25 * sw;
-        this.armL.rotation.x = -0.4; this.armR.rotation.x = -0.4;
-        this.armL.rotation.z = 0.2; this.armR.rotation.z = -0.2;
-        this.body.position.y = -0.12;
-        this.head.rotation.x = 0.1;
+        tLegL = -0.9 + Math.sin(ph * 2) * 0.22 * A.gait;
+        tLegR = -0.9 - Math.sin(ph * 2) * 0.22 * A.gait;
+        tArmL = -0.4; tArmR = -0.4;
+        tArmLz = 0.2; tArmRz = -0.2;
+        tBodyY = -0.12;
+        tHeadX = 0.1;
         this.state = 'crouch';
-      } else if (sp > 0.15) {
-        const swing = 0.55 * sw + walkRun * 0.35;
-        const s = Math.sin(ph * 2);
-        this.legL.rotation.x = s * swing;
-        this.legR.rotation.x = -s * swing;
-        this.armL.rotation.x = -s * swing * 0.9;
-        this.armR.rotation.x = s * swing * 0.9;
-        this.armL.rotation.z = 0.08 + walkRun * 0.06;
-        this.armR.rotation.z = -0.08 - walkRun * 0.06;
-        this.body.position.y = Math.abs(Math.sin(ph * 2)) * 0.045 * sw + walkRun * 0.01;
-        this.body.rotation.x = walkRun * 0.06;
-        this.head.rotation.x = -walkRun * 0.05;
-        this.state = this.running ? 'run' : 'walk';
       } else {
-        // 待机呼吸
-        const b = Math.sin(this.animTime * 1.6);
-        this.legL.rotation.x = G.damp(this.legL.rotation.x, 0, 8, dt);
-        this.legR.rotation.x = G.damp(this.legR.rotation.x, 0, 8, dt);
-        this.armL.rotation.x = G.damp(this.armL.rotation.x, b * 0.04, 8, dt);
-        this.armR.rotation.x = G.damp(this.armR.rotation.x, -b * 0.04, 8, dt);
-        this.armL.rotation.z = G.damp(this.armL.rotation.z, 0.1, 6, dt);
-        this.armR.rotation.z = G.damp(this.armR.rotation.z, -0.1, 6, dt);
-        this.body.position.y = b * 0.012;
-        this.body.rotation.x = G.damp(this.body.rotation.x, 0, 6, dt);
-        this.head.rotation.x = G.damp(this.head.rotation.x, b * 0.02, 4, dt);
-        this.head.rotation.y = Math.sin(this.animTime * 0.5) * 0.12;
-        this.state = 'idle';
+        /* 站 / 走 / 跑 统一混合：gait 决定幅度，停下时自然收回，不再瞬切 */
+        const wantGait = moving ? g0.clamp(sp / 3.6, 0, 1.6) * (this.running ? 1.12 : 1) : 0;
+        A.gait = g0.damp(A.gait, wantGait, moving ? 13 : 9, dt);
+        const gN = Math.min(A.gait, 1.25);
+        const s1 = Math.sin(ph * 2), c1 = Math.cos(ph * 2);
+        const swing = 0.56 * gN;
+        tLegL = s1 * swing;
+        tLegR = -s1 * swing;
+        // 手臂反向摆，跑起来幅度更大、肘部外张
+        tArmL = -s1 * (swing * 0.82 + 0.1 * runW);
+        tArmR = s1 * (swing * 0.82 + 0.1 * runW);
+        tArmLz = 0.1 + 0.1 * runW + Math.abs(s1) * 0.05 * gN;
+        tArmRz = -tArmLz;
+        // 起伏：跑步双频更"弹"
+        tBodyY = Math.abs(s1) * 0.045 * gN - 0.014 * runW + Math.abs(c1) * 0.013 * runW;
+        tTiltX = 0.115 * runW;
+        tHeadX = -0.06 * runW + c1 * 0.02 * gN;
+        tLeanZ = -s1 * 0.055 * gN;              // 走路时躯干随步子轻摆
+        // 停下后的呼吸与四处张望
+        const idleW = g0.clamp(1 - A.gait * 1.7, 0, 1);
+        if (idleW > 0.001) {
+          const b = Math.sin(this.animTime * 1.6);
+          tArmL += b * 0.045 * idleW;
+          tArmR -= b * 0.045 * idleW;
+          tBodyY += b * 0.012 * idleW;
+          tHeadX += b * 0.02 * idleW;
+          tHeadY = Math.sin(this.animTime * 0.5) * 0.12 * idleW;
+        }
+        this.state = runW > 0.5 ? 'run' : (A.gait > 0.32 ? 'walk' : 'idle');
       }
-      // 跑动时前倾
-      if (this.state === 'run') this.body.rotation.x = 0.1;
-      // 马尾摆动
+
+      /* —— 落地缓冲叠加：下蹲 + 手臂前伸 —— */
+      if (land > 0.001) {
+        tBodyY -= 0.2 * land;
+        tLegL += 0.62 * land;
+        tLegR += 0.62 * land;
+        tArmL += -0.5 * land;
+        tArmR += -0.5 * land;
+        tArmLz += 0.24 * land;
+        tArmRz -= 0.24 * land;
+        tTiltX += 0.1 * land;
+        k = Math.max(k, 17);
+      }
+
+      /* —— 转向倾身：用偏航角速度驱动 —— */
+      const leanT = g0.clamp(-(this.turnRate || 0) * 0.03, -0.15, 0.15);
+      A.turnLean = g0.damp(A.turnLean || 0, leanT, 7, dt);
+      tLeanZ += A.turnLean;
+
+      /* —— 阻尼到关节（所有状态共用，切换自然） —— */
+      A.legL = g0.damp(A.legL, tLegL, k, dt);
+      A.legR = g0.damp(A.legR, tLegR, k, dt);
+      A.armL = g0.damp(A.armL, tArmL, k, dt);
+      A.armR = g0.damp(A.armR, tArmR, k, dt);
+      A.armLz = g0.damp(A.armLz, tArmLz, k, dt);
+      A.armRz = g0.damp(A.armRz, tArmRz, k, dt);
+      A.bodyY = g0.damp(A.bodyY, tBodyY, k, dt);
+      A.tiltX = g0.damp(A.tiltX, tTiltX, k, dt);
+      A.headX = g0.damp(A.headX, tHeadX, k, dt);
+      A.headY = g0.damp(A.headY || 0, tHeadY, 4, dt);
+      A.lean = g0.damp(A.lean, tLeanZ, 8, dt);
+
+      this.legL.rotation.x = A.legL;
+      this.legR.rotation.x = A.legR;
+      this.armL.rotation.x = A.armL;
+      this.armR.rotation.x = A.armR;
+      this.armL.rotation.z = A.armLz;
+      this.armR.rotation.z = A.armRz;
+      this.body.position.y = A.bodyY;
+      this.body.rotation.x = A.tiltX;
+      this.body.rotation.z = A.lean;
+      this.head.rotation.x = A.headX;
+      this.head.rotation.y = A.headY;
+
+      /* —— 马尾：跟着步频与速度甩 —— */
       if (this.tail) {
-        const sway = Math.sin(this.animTime * 3.2) * 0.05 + Math.min(this.speed / 12, 0.25);
-        this.tail.rotation.x = G.damp(this.tail.rotation.x, sway, 6, dt);
-        this.tail.rotation.z = G.damp(this.tail.rotation.z, Math.sin(this.animTime * 2.1) * 0.04, 5, dt);
+        const sway = Math.sin(this.animTime * 3.2) * 0.05 + Math.min(this.speed / 12, 0.25) + A.lean * 0.6;
+        this.tail.rotation.x = g0.damp(this.tail.rotation.x, sway, 6, dt);
+        this.tail.rotation.z = g0.damp(this.tail.rotation.z, Math.sin(this.animTime * 2.1) * 0.04, 5, dt);
       }
     },
 
     /* ---------- 相机 ---------- */
     updateCamera(dt) {
       const cam = G.R.camera;
-      const eyeY = this.pos.y + (this.crouch ? 1.05 : 1.52);
+      const dip = (this.anim ? this.anim.land * 0.09 : 0);   // 落地时镜头轻轻一沉
+      const eyeY = this.pos.y + (this.crouch ? 1.05 : 1.52) - dip;
       if (this.firstPerson) {
         cam.position.set(this.pos.x, eyeY, this.pos.z);
         // 与第三人称统一：上滑 => camPitch 减小 => 抬头
@@ -3650,7 +3828,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
       this.head.visible = true;
       // 目标点
-      const tgt = new THREE.Vector3(this.pos.x, this.pos.y + 1.35 + (this.crouch ? -0.3 : 0), this.pos.z);
+      const tgt = new THREE.Vector3(this.pos.x, this.pos.y + 1.35 + (this.crouch ? -0.3 : 0) - (this.anim ? this.anim.land * 0.07 : 0), this.pos.z);
       const wantDist = this.camDistWanted ?? this.camDist;
       this.camTargetDist = this.indoor ? G.clamp(wantDist, 2.0, 3.6) : G.clamp(wantDist, 2.2, 12);
       let dist = this.camTargetDist;
@@ -3900,7 +4078,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const legR = legL.clone();
         legL.position.set(-0.1, 0.36, 0); legR.position.set(0.1, 0.36, 0);
         legL.castShadow = legR.castShadow = true;
-        g.add(torso, legL, legR);
+        // 手臂：肩点为轴，袖子 + 小臂
+        const armL = new THREE.Group(), armR = new THREE.Group();
+        for (const arm of [armL, armR]) {
+          const sleeve = new THREE.Mesh(gbox(0.125, 0.3, 0.145), mat(shirt, 0, 0.9));
+          sleeve.position.y = -0.16;
+          const fore = new THREE.Mesh(gbox(0.105, 0.26, 0.12), mat(0xf2cdb4, 0, 0.9));
+          fore.position.y = -0.44;
+          sleeve.castShadow = fore.castShadow = true;
+          arm.add(sleeve, fore);
+        }
+        armL.position.set(-0.28, 1.3, 0); armR.position.set(0.28, 1.3, 0);
+        armL.rotation.z = 0.06; armR.rotation.z = -0.06;
+        g.add(torso, legL, legR, armL, armR);
         g.scale.setScalar(0.92 + Math.random() * 0.2);
         // 前 70% 分布在玩家周围 1 个街区范围
         let bx, bz;
@@ -3919,11 +4109,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         g.position.set(cx, 0.18, cz + half);
         this.scene.add(g);
         this.peds.push({
-          g, torso, legL, legR, cx, cz, bx, bz,
+          g, torso, legL, legR, armL, armR, cx, cz, bx, bz,
           s: Math.random() * per, per, half,
           speed: idle ? 0 : G.rand(1.1, 1.9),
-          phase: Math.random() * 6, idle,
-          idleTime: G.rand(1, 4)
+          phase: Math.random() * 6, idle, gait: 0, cur: idle ? 0 : 1.4,
+          yaw: 0, yawV: 0, lean: 0, idleTime: G.rand(1, 4)
         });
       }
     },
@@ -3981,15 +4171,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       for (const c of this.ai) this.updateAI(dt, c);
       // 行人
       for (const p of this.peds) {
+        // 停/走的速度缓冲：起步与驻足都有过渡
+        const wantSpd = p.idle ? 0 : p.speed;
+        p.cur = G.damp(p.cur, wantSpd, 5.5, dt);
         if (p.idle) {
-          // 站一会儿再走
           p.idleTime -= dt;
-          p.phase += dt * 1.4;
-          p.torso.position.y = Math.sin(p.phase) * 0.008;
           if (p.idleTime <= 0) { p.idle = false; p.speed = G.rand(0.95, 1.65); }
-          continue;
+        } else {
+          p.s += p.cur * dt;
         }
-        p.s += p.speed * dt;
         const t = (p.s % p.per) / p.per;
         const h = p.half;
         let x, z, yaw;
@@ -3998,11 +4188,34 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         else if (t < 0.75) { const u = (t - 0.5) * 4; x = p.cx + h - u * 2 * h; z = p.cz - h; yaw = -Math.PI / 2; }
         else { const u = (t - 0.75) * 4; x = p.cx - h; z = p.cz - h + u * 2 * h; yaw = 0; }
         p.g.position.set(x, 0.18, z);
-        p.g.rotation.y = yaw;
-        p.phase += dt * 7;
-        const sw = Math.sin(p.phase) * 0.5;
-        p.legL.rotation.x = sw; p.legR.rotation.x = -sw;
-        p.torso.position.y = Math.abs(Math.sin(p.phase)) * 0.02;
+        // 朝向平滑（拐角不再瞬间转 90°），并产生侧倾
+        let dy = yaw - p.yaw;
+        while (dy > Math.PI) dy -= Math.PI * 2;
+        while (dy < -Math.PI) dy += Math.PI * 2;
+        const stepY = dy * Math.min(1, dt * 6.5);
+        p.yaw += stepY;
+        p.yawV = stepY / Math.max(dt, 0.0001);
+        p.g.rotation.y = p.yaw;
+        p.lean = G.damp(p.lean, G.clamp(-p.yawV * 0.035, -0.12, 0.12), 7, dt);
+
+        // 步态混合
+        p.gait = G.damp(p.gait, p.cur > 0.25 ? 1 : 0, 6, dt);
+        p.phase += dt * (4.6 + p.cur * 2.0);
+        const s1 = Math.sin(p.phase), gN = p.gait;
+        const swL = s1 * 0.52 * gN, swR = -s1 * 0.52 * gN;
+        p.legL.rotation.x = swL; p.legR.rotation.x = swR;
+        if (p.armL) {
+          p.armL.rotation.x = -swL * 0.78;
+          p.armR.rotation.x = -swR * 0.78;
+          p.armL.rotation.z = 0.07 + Math.max(0, -s1) * 0.05 * gN;
+          p.armR.rotation.z = -0.07 - Math.max(0, s1) * 0.05 * gN;
+        }
+        // 起伏 + 侧摆 + 驻足呼吸
+        const bob = Math.abs(s1) * 0.028 * gN;
+        const idleW = 1 - gN;
+        p.torso.position.y = bob + Math.sin(p.phase * 0.35 + p.s) * 0.008 * idleW;
+        p.torso.rotation.z = p.lean + s1 * 0.022 * gN;
+        p.torso.rotation.y = Math.sin(p.phase * 0.22) * 0.1 * idleW;
       }
       // 动态调度：把远处的行人与车辆搬到玩家附近，保持街道人气
       this._recycleT = (this._recycleT || 0) + dt;
@@ -5371,6 +5584,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       $('objPhoto').textContent = `照片 ${p.photos}`;
       $('objPlace').textContent = `地点 ${p.places}`;
       const oc = $('objCard'); if (oc) oc.textContent = `明信片 ${p.cards || 0}/${p.totalCards || 24}`;
+      const om = $('objMoment'); if (om) om.textContent = `惊喜 ${(G.Moments ? Object.keys(G.Moments.found).filter(k => k !== '__finale').length : 0)}/7`;
     },
 
     tickClock() {
@@ -5654,12 +5868,508 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
 </script>
 <script>
+/* moments.js —— 建筑内的情侣惊喜 / 浪漫粒子 / 小玩法 */
+(function (global) {
+  'use strict';
+  const G = global.G;
+  if (!G) return;
+
+  /* ---------- 纹理（画在 canvas 上，无外部素材） ---------- */
+  function texHeart() {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff';
+    x.beginPath();
+    x.moveTo(32, 56);
+    x.bezierCurveTo(6, 38, 4, 20, 18, 14);
+    x.bezierCurveTo(26, 11, 32, 18, 32, 24);
+    x.bezierCurveTo(32, 18, 38, 11, 46, 14);
+    x.bezierCurveTo(60, 20, 58, 38, 32, 56);
+    x.fill();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+  function texStar() {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d');
+    const g = x.createRadialGradient(32, 32, 0, 32, 32, 31);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.35, 'rgba(255,255,255,.75)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+    x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = 3;
+    x.beginPath(); x.moveTo(32, 12); x.lineTo(32, 52); x.moveTo(12, 32); x.lineTo(52, 32); x.stroke();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+
+  /* ---------- 粒子池 ---------- */
+  function burstPool(tex, count, gravity, size) {
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3), col = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) pos[i * 3 + 1] = -9999;
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const mat = new THREE.PointsMaterial({
+      map: tex, size: size || 0.42, sizeAttenuation: true, vertexColors: true,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false
+    });
+    const pts = new THREE.Points(geo, mat);
+    pts.frustumCulled = false;
+    pts.renderOrder = 6;
+    const P = {
+      pts, geo, n: count, head: 0, gravity: gravity === undefined ? 1.6 : gravity,
+      vel: new Float32Array(count * 3), life: new Float32Array(count), max: new Float32Array(count),
+      base: new Float32Array(count * 3)
+    };
+    P.emit = function (x, y, z, n, opt) {
+      opt = opt || {};
+      for (let k = 0; k < n; k++) {
+        const i = P.head; P.head = (P.head + 1) % P.n;
+        const sp = opt.spread || 1.2, up = opt.up || 1.6;
+        pos[i * 3] = x + (Math.random() - 0.5) * (opt.r || 0.3);
+        pos[i * 3 + 1] = y + (Math.random() - 0.5) * 0.2;
+        pos[i * 3 + 2] = z + (Math.random() - 0.5) * (opt.r || 0.3);
+        P.vel[i * 3] = (Math.random() - 0.5) * sp;
+        P.vel[i * 3 + 1] = up * (0.5 + Math.random() * 0.9);
+        P.vel[i * 3 + 2] = (Math.random() - 0.5) * sp;
+        const c = opt.color || 0xff9dc4;
+        P.base[i * 3] = ((c >> 16) & 255) / 255;
+        P.base[i * 3 + 1] = ((c >> 8) & 255) / 255;
+        P.base[i * 3 + 2] = (c & 255) / 255;
+        P.max[i] = P.life[i] = (opt.life || 1.6) * (0.7 + Math.random() * 0.6);
+      }
+      geo.attributes.position.needsUpdate = true;
+    };
+    P.update = function (dt) {
+      let alive = false;
+      for (let i = 0; i < P.n; i++) {
+        if (P.life[i] <= 0) continue;
+        alive = true;
+        P.life[i] -= dt;
+        const f = Math.max(0, P.life[i] / P.max[i]);
+        P.vel[i * 3 + 1] -= P.gravity * dt;
+        pos[i * 3] += P.vel[i * 3] * dt;
+        pos[i * 3 + 1] += P.vel[i * 3 + 1] * dt;
+        pos[i * 3 + 2] += P.vel[i * 3 + 2] * dt;
+        P.vel[i * 3] *= 1 - 0.9 * dt;
+        P.vel[i * 3 + 2] *= 1 - 0.9 * dt;
+        col[i * 3] = P.base[i * 3] * f;
+        col[i * 3 + 1] = P.base[i * 3 + 1] * f;
+        col[i * 3 + 2] = P.base[i * 3 + 2] * f;
+        if (P.life[i] <= 0) { pos[i * 3 + 1] = -9999; col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = 0; }
+      }
+      if (alive) {
+        geo.attributes.position.needsUpdate = true;
+        geo.attributes.color.needsUpdate = true;
+      }
+    };
+    return P;
+  }
+
+  /* ---------- 小工具 ---------- */
+  const M = G.Moments = {
+    ready: false, found: {}, total: 7, spots: [],
+    hearts: null, sparks: null, seq: [], tweens: [], timers: 0,
+    notes: 0,
+
+    init(scene) {
+      if (this.ready) return;
+      this.ready = true;
+      this.hearts = burstPool(texHeart(), 160, -0.35, 0.40);
+      this.sparks = burstPool(texStar(), 220, 1.2, 0.30);
+      scene.add(this.hearts.pts, this.sparks.pts);
+      this.makeStarfield(scene);
+    },
+
+    /* 星空穹顶（看星星惊喜用，平时不可见） */
+    makeStarfield(scene) {
+      const n = 420, pos = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, r = 20 + Math.random() * 90;
+        pos[i * 3] = Math.cos(a) * r;
+        pos[i * 3 + 1] = 12 + Math.random() * 55;
+        pos[i * 3 + 2] = Math.sin(a) * r;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const mat = new THREE.PointsMaterial({
+        map: texStar(), size: 1.5, sizeAttenuation: true, color: 0xcfe4ff,
+        transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false
+      });
+      const pts = new THREE.Points(geo, mat);
+      pts.frustumCulled = false;
+      pts.visible = false;
+      scene.add(pts);
+      this.stars = pts;
+      this.starOn = 0;
+    },
+
+    /* 找一个不撞墙的落点 */
+    free(x, y, z) {
+      if (!G.COL || !G.COL.pointSolid) return { x, y, z };
+      if (!G.COL.pointSolid(x, y, z)) return { x, y, z };
+      for (let r = 0.8; r <= 4; r += 0.6) {
+        for (let a = 0; a < 8; a++) {
+          const nx = x + Math.cos(a * Math.PI / 4) * r, nz = z + Math.sin(a * Math.PI / 4) * r;
+          if (!G.COL.pointSolid(nx, y, nz)) return { x: nx, y, z: nz };
+        }
+      }
+      return { x, y, z };
+    },
+
+    box(w, h, d, color, x, y, z, opt) {
+      opt = opt || {};
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+        new THREE.MeshStandardMaterial({
+          color, roughness: opt.rough === undefined ? 0.62 : opt.rough,
+          metalness: opt.metal || 0,
+          emissive: opt.glow || 0x000000, emissiveIntensity: opt.glowI || 1,
+          transparent: !!opt.alpha, opacity: opt.alpha || 1
+        }));
+      m.position.set(x, y, z);
+      if (opt.rotY) m.rotation.y = opt.rotY;
+      m.castShadow = !opt.noShadow; m.receiveShadow = true;
+      return m;
+    },
+
+    /* 出现时弹一下 */
+    pop(group) {
+      group.scale.setScalar(0.001);
+      group.userData.pop = 0;
+      this.tweens.push({ g: group, t: 0, dur: 0.55 });
+    },
+
+    say(o, title, msg) { G.UI && G.UI.readNote(title, msg); },
+
+    /* ---------- 触发 ---------- */
+    use(o) {
+      const key = o.key;
+      const first = !this.found[key];
+      this.found[key] = 1;
+      this.build_(key, o);
+      const n = Object.keys(this.found).length;
+      if (G.Quests) G.Quests.flags['moment_' + key] = 1;
+      if (first) {
+        const def = M.SPOTS[key];
+        if (def && def.gift) {
+          G.Inv && G.Inv.add(def.gift, 1);
+          G.UI && G.UI.toast('惊喜 +1 · 获得一枚「共同回忆」明信片', 2400);
+        } else {
+          G.UI && G.UI.toast('惊喜 ' + n + '/' + this.total, 2000);
+        }
+        if (G.Quests) G.Quests.flags.moments = n;
+        G.UI && G.UI.updateQuest();
+      }
+      G.Audio && G.Audio.sfx('chime');
+      if (n >= this.total && !this.found.__finale) {
+        this.found.__finale = 1;
+        this.fireworks(o.x, o.y + 8, o.z, 7);
+        G.UI && G.UI.hint('六个惊喜都找到了 · 滨江观景台在等你们', 4200);
+      }
+    },
+
+    /* ---------- 每栋楼的惊喜内容 ---------- */
+    build_(key, o) {
+      const S = G.R.scene, y = o.y;
+      if (o.built) {                 // 已建好：只播粒子 + 文案
+        this.fx(key, o);
+        return;
+      }
+      o.built = true;
+      const g = new THREE.Group();
+      g.position.set(o.x, 0, o.z);
+      S.add(g);
+      const A = this[ 'prop_' + key ];
+      if (A) A.call(this, g, o);
+      this.pop(g);
+      this.fx(key, o);
+    },
+
+    fx(key, o) {
+      const A = G.Audio;
+      this.hearts.emit(o.x, o.y + 0.6, o.z, 26, { up: 1.5, spread: 1.0, color: 0xff9dc4 });
+      this.sparks.emit(o.x, o.y + 0.5, o.z, 16, { up: 2.2, spread: 1.8, color: 0xffe6a8, life: 1.1 });
+      if (key === 'garage') {
+        this.starOn = 1; this.stars.visible = true;
+        this.stars.position.set(o.x, 0, o.z);
+      }
+      if (key === 'music') this.melody();
+      const d = this.SPOTS[key];
+      if (d) this.say(o, d.title, d.text);
+    },
+
+    melody() {
+      const notes = [523, 587, 659, 784, 880, 784, 659, 587, 523, 659, 784, 1046];
+      notes.forEach((f, i) => {
+        this.seq.push({ t: i * 0.26, fn: () => G.Audio && G.Audio.tone(f, 0.42, 'sine', 0.075) });
+      });
+      this.seq.push({ t: 12 * 0.26, fn: () => {
+        G.Audio && G.Audio.tone(1046, 0.9, 'sine', 0.07, 1568);
+        const pp = G.Player && G.Player.pos;
+        if (pp) this.hearts.emit(pp.x, pp.y + 1.4, pp.z, 40, { up: 1.9, r: 1.4, color: 0xff9dc4, life: 2.4 });
+      }});
+    },
+
+    /* 道具：咖啡馆双人座 */
+    prop_cafe(g, o) {
+      const t = this.box(1.5, 0.08, 0.9, 0xb98a5c, 0, 0.95, 0);
+      const leg = this.box(0.12, 0.74, 0.12, 0x8a5d3a, 0, 0.57, 0);
+      const cupA = this.box(0.18, 0.2, 0.18, 0xfff4e8, -0.34, 1.09, 0.1, { glow: 0xffd9a0, glowI: 0.18 });
+      const cupB = this.box(0.18, 0.2, 0.18, 0xfff4e8, 0.34, 1.09, 0.1, { glow: 0xffd9a0, glowI: 0.18 });
+      const candle = this.box(0.1, 0.26, 0.1, 0xffe0b0, 0, 1.12, -0.24, { glow: 0xffb347, glowI: 1.4 });
+      const flame = this.box(0.07, 0.1, 0.07, 0xfff0c0, 0, 1.3, -0.24, { glow: 0xffc862, glowI: 2.4, noShadow: true });
+      g.add(t, leg, cupA, cupB, candle, flame);
+      this.flame = flame;
+      const light = new THREE.PointLight(0xffb066, 2.2, 5.2, 2);
+      light.position.set(0, 1.35, -0.2);
+      g.add(light);
+      o.light = light;
+    },
+
+    /* 便利店：扭蛋机 */
+    prop_store(g, o) {
+      const body = this.box(0.9, 1.3, 0.7, 0xe8617a, 0, 0.86, 0);
+      const dome = this.box(0.72, 0.62, 0.56, 0xbfe6ff, 0, 1.55, 0, { alpha: 0.45, rough: 0.1, glow: 0x88ccff, glowI: 0.25 });
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 12),
+        new THREE.MeshStandardMaterial({ color: 0xffd166, metalness: 0.8, roughness: 0.3 }));
+      knob.rotation.z = Math.PI / 2; knob.position.set(0, 1.0, 0.38);
+      g.add(body, dome, knob);
+      this.knob = knob;
+      const colors = [0xff8fb8, 0x8fd3ff, 0xffd166, 0xc792ff];
+      for (let i = 0; i < 7; i++) {
+        const b = this.box(0.13, 0.13, 0.13, colors[i % 4], (Math.random() - 0.5) * 0.5, 1.36 + Math.random() * 0.28, (Math.random() - 0.5) * 0.36, { glow: colors[i % 4], glowI: 0.5 });
+        g.add(b); this.tweens.push({ g: b, t: 0, dur: 0.6, spin: true });
+      }
+    },
+
+    /* 写字楼：云端小桌（二层玻璃房） */
+    prop_office(g, o) {
+      const base = 4.4;                    // 二层地面
+      const t = this.box(1.6, 0.07, 1.0, 0xdfe9f2, 0, base + 0.76, 0, { alpha: 0.55, rough: 0.05, glow: 0x9fd8ff, glowI: 0.15 });
+      const rim = this.box(1.64, 0.04, 1.04, 0xffffff, 0, base + 0.72, 0, { glow: 0xbfe3f0, glowI: 0.9 });
+      const a = this.box(0.16, 0.22, 0.16, 0xffd9a0, -0.4, base + 0.9, 0.1, { glow: 0xffc86a, glowI: 0.9 });
+      const b = this.box(0.16, 0.22, 0.16, 0xffd9a0, 0.4, base + 0.9, 0.1, { glow: 0xffc86a, glowI: 0.9 });
+      const lamp = this.box(0.3, 0.5, 0.3, 0xfff0d0, 0, base + 2.2, 0, { glow: 0xffe9c0, glowI: 1.6, noShadow: true });
+      const light = new THREE.PointLight(0xffe9cc, 2.4, 7, 2);
+      light.position.set(0, base + 2.1, 0);
+      g.add(t, rim, a, b, lamp, light);
+      o.light = light;
+    },
+
+    /* 公寓：阳台串灯 */
+    prop_apartment(g, o) {
+      const base = 4.4;
+      for (let i = 0; i < 9; i++) {
+        const px = -2 + i * 0.5;
+        const bulb = this.box(0.1, 0.12, 0.1, 0xfff3d0, px, base + 1.5 + Math.sin(i * 0.9) * 0.12, 0, { glow: 0xffd88a, glowI: 2.2, noShadow: true });
+        g.add(bulb);
+        this.tweens.push({ g: bulb, t: -i * 0.06, dur: 0.5, pulse: 0.5 + i * 0.11 });
+      }
+      const chairA = this.box(0.6, 0.1, 0.6, 0xd9c3b2, -0.9, base + 0.45, 0);
+      const chairB = this.box(0.6, 0.1, 0.6, 0xd9c3b2, 0.9, base + 0.45, 0);
+      const backA = this.box(0.6, 0.55, 0.1, 0xd9c3b2, -0.9, base + 0.72, -0.26);
+      const backB = this.box(0.6, 0.55, 0.1, 0xd9c3b2, 0.9, base + 0.72, -0.26);
+      const light = new THREE.PointLight(0xffd9a0, 1.9, 6, 2);
+      light.position.set(0, base + 1.4, 0);
+      g.add(chairA, chairB, backA, backB, light);
+      o.light = light;
+    },
+
+    /* 停车楼：车顶看星星 */
+    prop_garage(g, o) {
+      const car = this.box(3.4, 0.7, 1.8, 0x6f8fb8, 0, 0.75, 0);
+      const roof = this.box(2.0, 0.5, 1.6, 0x7ea2cc, -0.1, 1.32, 0);
+      const blanket = this.box(1.8, 0.06, 1.2, 0xffc0d0, 0, 1.62, 0, { glow: 0xff9dc4, glowI: 0.12 });
+      const lamp = this.box(0.2, 0.12, 0.2, 0xffe9b0, 0.6, 1.72, 0.4, { glow: 0xffd27a, glowI: 2.6, noShadow: true });
+      const light = new THREE.PointLight(0xffd9a0, 2.0, 6.5, 2);
+      light.position.set(0.5, 1.9, 0.3);
+      g.add(car, roof, blanket, lamp, light);
+      o.light = light;
+    },
+
+    /* 公主公寓：音乐盒 */
+    prop_music(g, o) {
+      const base = this.box(0.7, 0.34, 0.5, 0xb0304a, 0, 0.42, 0);
+      const lid = this.box(0.72, 0.06, 0.52, 0xd94f6d, 0, 0.62, 0);
+      const fig = new THREE.Group();
+      const dress = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.3, 10),
+        new THREE.MeshStandardMaterial({ color: 0xffd9e6, roughness: 0.5, emissive: 0xff9dc4, emissiveIntensity: 0.35 }));
+      dress.position.y = 0.15;
+      const head = this.box(0.11, 0.11, 0.11, 0xfff2e8, 0, 0.34, 0, { glow: 0xffd9c0, glowI: 0.2 });
+      fig.add(dress, head);
+      fig.position.set(0, 0.62, 0);
+      const light = new THREE.PointLight(0xffc0d8, 1.6, 4.5, 2);
+      light.position.set(0, 0.9, 0);
+      g.add(base, lid, fig, light);
+      this.fig = fig;
+      o.light = light;
+    },
+
+    /* 观景台：结局 */
+    prop_bench(g, o) {
+      const b1 = this.box(1.8, 0.1, 0.5, 0xa9713f, 0, 0.62, 0);
+      const b2 = this.box(1.8, 0.5, 0.1, 0xa9713f, 0, 0.9, -0.2);
+      const l = new THREE.PointLight(0xffd9a0, 1.6, 5, 2); l.position.set(0, 1.2, 0.4);
+      g.add(b1, b2, l); o.light = l;
+    },
+
+    fireworks(x, y, z, times) {
+      for (let i = 0; i < times; i++) {
+        this.seq.push({
+          t: i * 0.55,
+          fn: () => {
+            const cx = x + (Math.random() - 0.5) * 22, cz = z + (Math.random() - 0.5) * 22, cy = y + 6 + Math.random() * 14;
+            const col = [0xff9dc4, 0xffd166, 0x9fd8ff, 0xc792ff, 0xfff0c0][(Math.random() * 5) | 0];
+            this.sparks.emit(cx, cy, cz, 60, { up: 0.4, spread: 9, r: 0.4, color: col, life: 1.9 });
+            G.Audio && G.Audio.tone(120 + Math.random() * 60, 0.5, 'sine', 0.06, 60);
+          }
+        });
+      }
+    },
+
+    /* ---------- 世界构建时登记各楼惊喜 ---------- */
+    build(game) {
+      const W = G.W;
+      if (!W || !W.enterables) return;
+      this.init(G.R.scene);
+      const SPOTS = M.SPOTS;
+      const ent = (k) => W.enterables[k];
+      const add = (key, cx, cz, dy, def) => {
+        const p = this.free(cx, (dy || 0) + 1.1, cz);
+        const o = G.Interact.add({
+          kind: 'moment', key, x: p.x, y: p.y, z: p.z,
+          label: def.label, built: false,
+          onUse: (it) => M.use(it)
+        });
+        this.spots.push(o);
+        return o;
+      };
+
+      const cafe = ent('cafe');
+      if (cafe) add('cafe', (cafe.x0 + cafe.x1) / 2 - 5.5, (cafe.z0 + cafe.z1) / 2 - 2.0, 0, SPOTS.cafe);
+
+      const store = ent('store');
+      if (store) add('store', store.x0 + 3.2, store.z0 + 4.0, 0, SPOTS.store);
+
+      const office = ent('office');
+      if (office) {
+        const ocx = (office.x0 + office.x1) / 2, ocz = (office.z0 + office.z1) / 2;
+        add('office', ocx - 6, ocz + 7.0, 4.4, SPOTS.office);
+      }
+
+      const apt = ent('apartment');
+      if (apt) {
+        const ax = (apt.x0 + apt.x1) / 2, az = (apt.z0 + apt.z1) / 2;
+        add('apartment', ax + 5.5, az - 5.5, 4.4, SPOTS.apartment);
+      }
+
+      const gar = ent('garage');
+      if (gar) add('garage', (gar.x0 + gar.x1) / 2 + 3, (gar.z0 + gar.z1) / 2 - 5, 0, SPOTS.garage);
+
+      const pr = ent('princess');
+      if (pr) add('music', (pr.x0 + pr.x1) / 2 + 4.5, (pr.z0 + pr.z1) / 2 - 3.5, 0, SPOTS.music);
+
+      const deck = W.viewDeck;
+      if (deck) add('bench', deck.x + 3.5, deck.z, 0, SPOTS.bench);
+    },
+
+    /* ---------- 每帧 ---------- */
+    update(dt) {
+      if (!this.ready) return;
+      this.hearts.update(dt);
+      this.sparks.update(dt);
+      // 星星淡入淡出
+      if (this.stars) {
+        const cur = this.stars.material.opacity;
+        const want = this.starOn;
+        if (Math.abs(cur - want) > 0.002) this.stars.material.opacity = G.damp(cur, want, 2.2, dt);
+        this.stars.rotation.y += dt * 0.012;
+        if (this.starOn > 0) this.starOn = Math.max(0, this.starOn - dt * 0.055);
+        this.stars.visible = this.stars.material.opacity > 0.01;
+      }
+      // 定时事件
+      if (this.seq.length) {
+        this.timers += dt;
+        for (let i = this.seq.length - 1; i >= 0; i--) {
+          if (this.seq[i].t <= this.timers) { const e = this.seq.splice(i, 1)[0]; try { e.fn(); } catch (err) {} }
+        }
+      }
+      // 弹出 / 呼吸动画
+      for (let i = this.tweens.length - 1; i >= 0; i--) {
+        const tw = this.tweens[i];
+        tw.t += dt;
+        if (tw.pulse !== undefined) {
+          const k = 0.6 + 0.4 * Math.sin((this.timers + tw.t) * (2 + tw.pulse));
+          if (tw.g.material) tw.g.material.emissiveIntensity = 1.2 + k * 1.2;
+          if (tw.t > tw.dur + 1e9) this.tweens.splice(i, 1);
+          continue;
+        }
+        if (tw.spin) { tw.g.rotation.y += dt * 0.8; tw.g.rotation.x += dt * 0.4; }
+        if (tw.t >= tw.dur) {
+          tw.g.scale.setScalar(1);
+          if (tw.spin) continue;
+          this.tweens.splice(i, 1);
+          continue;
+        }
+        const p = Math.max(0, tw.t / tw.dur);
+        const e = 1 + 2.2 * Math.pow(p - 1, 3) + 1.2 * Math.pow(p - 1, 2);  // easeOutBack 近似
+        tw.g.scale.setScalar(Math.max(0.001, e));
+      }
+      // 蜡烛火焰 / 音乐盒小人
+      if (this.flame) {
+        const f = 1 + Math.sin(this.timers * 9) * 0.14;
+        this.flame.scale.set(f, 1 / f, f);
+      }
+      if (this.fig) this.fig.rotation.y += dt * 1.1;
+      if (this.knob) this.knob.rotation.x += dt * 0.6;
+    }
+  };
+
+  M.SPOTS = {
+    cafe: {
+      label: '靠窗的双人座', title: '咖啡馆 · 留一杯给你',
+      text: '两杯热可可，一杯是你的，一杯是「你别急，我等你」。（店员说：这个位子每天都会有人提前来擦一次桌子。）',
+      gift: 'postcard'
+    },
+    store: {
+      label: '扭蛋机', title: '便利店 · 扭一颗试试',
+      text: '咔哒一声，掉出来一颗粉色的小球。里面写着：「今天也辛苦啦，奖励你一个抱抱。」',
+      gift: 'postcard'
+    },
+    office: {
+      label: '二层的玻璃小桌', title: '云顶大厦 · 城市在脚下',
+      text: '整座城市铺在玻璃下面，车流像一条会呼吸的项链。她把杯子推过来：「等你下班，我们一起看灯亮起来。」',
+      gift: 'postcard'
+    },
+    apartment: {
+      label: '阳台上的串灯', title: '梧桐公寓 · 阳台的风',
+      text: '傍晚的风掀了一下窗帘，串灯晃成一串小太阳。两把椅子，一高一矮——「矮的那把给你，你脚短。」',
+      gift: 'postcard'
+    },
+    garage: {
+      label: '车顶的毛毯', title: '停车楼 · 车顶看星星',
+      text: '车顶铺了毯子，抬头是整片星空。有流星划过去，她小声说：「许愿别出声，说出来就不灵了。」',
+      gift: 'postcard'
+    },
+    music: {
+      label: '会转的音乐盒', title: '公主公寓 · 八音盒',
+      text: '八音盒自己转起来了。这首曲子她练了很久，只弹给一个人听——「你听，第一句是你的名字。」',
+      gift: 'postcard'
+    },
+    bench: {
+      label: '江边的双人长椅', title: '滨江 · 我们的故事',
+      text: '江风把声音吹得很远。灯一盏一盏亮起来，像有人在替这座城数心跳。（集齐六处惊喜，抬头看天。）'
+    }
+  };
+})(window);
+
+</script>
+<script>
 /* game.js —— 启动 / 主循环 / 内容布置 / 存档 / 性能自适应 */
 (function (global) {
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 202;
+  G.BUILD = 214;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
@@ -5685,8 +6395,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       safe('save', () => G.Save.init());
 
       // 室内跟随补光（进入任意建筑时点亮）
-      this.indoorLight = new THREE.PointLight(0xffe8c8, 0, 18, 2);
-      G.R.scene.add(this.indoorLight);
+      this.indoorLight = new THREE.PointLight(0xffe8c8, 0, 22, 2);
+      this.indoorHemi = G.R.indoorHemi = new THREE.HemisphereLight(0xfff2e0, 0x9a8b80, 0);
+      this.indoorHemi.visible = false;
+      G.R.scene.add(this.indoorLight, this.indoorHemi);
       this.buildClouds();
 
       // 反射环境贴图
@@ -5751,6 +6463,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const S = G.R.scene, W = G.W;
       const bcx = (bx) => W.OFF + bx * W.P + W.BLOCK / 2;
       const bcz = (bz) => W.OFF + bz * W.P + W.BLOCK / 2;
+      // 可进入建筑的真实中心（硬编码街区索引和实际布局会脱节，拾取物会落进楼体里）
+      const eC = (k) => {
+        const e = W.enterables && W.enterables[k];
+        return e ? { x: (e.x0 + e.x1) / 2, z: (e.z0 + e.z1) / 2 } : null;
+      };
+      const OFFICE = eC('office') || { x: bcx(3), z: bcz(2) };
+      const APT = eC('apartment') || { x: bcx(1), z: bcz(1) };
       const items = G.Items;
 
       // —— 12 朵发光小花
@@ -5770,8 +6489,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         { x: bcx(2) + 4, z: bcz(2) - 12, y: 1.15, title: '喷泉边', text: '「这座城市有一千条路，我只想挑一条通向你。」' },
         { x: bcx(2) + 3, z: bcz(0) - 3 + 4, y: 1.15, title: '咖啡馆', text: '「靠窗的位置我留给你了，还有一杯不会凉的热可可。」' },
         { x: bcx(0) - 6, z: bcz(3) - 6, y: 1.15, title: '公园长椅', text: '「春天的风会把花吹到你面前，就像现在这样。」' },
-        { x: bcx(1) - 4, z: bcz(1) - 3 - 5, y: 4.55, title: '公寓二楼', text: '「楼梯声一响，我就知道是你回来了。」' },
-        { x: bcx(3) - 6, z: bcz(2) - 6, y: 4.9, title: '写字楼天台层', text: '「从这里往下看，整座城市都在替我说喜欢。」' },
+        { x: APT.x - 4, z: APT.z - 4, y: 4.75, title: '公寓二楼', text: '「楼梯声一响，我就知道是你回来了。」' },
+        { x: OFFICE.x - 3, z: OFFICE.z + 6.4, y: 5.62, title: '写字楼二层', text: '「从这里往下看，整座城市都在替我说喜欢。」' },
         { x: (G.W.viewDeck ? G.W.viewDeck.x : bcx(2)) - 6, z: (G.W.viewDeck ? G.W.viewDeck.z : bcz(5)) + 6, y: 1.3, title: '滨江观景台', text: '「江风很轻，适合想你。」' }
       ];
       clues.forEach(c => items.spawnClue(S, c));
@@ -5780,7 +6499,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const pick = (item, x, z, y) => items.spawn(S, { item, x, z, y });
       pick('key', bcx(1) - 14, bcz(1) - 3 + 9, 1.1);       // 公寓门口
       pick('coffee', bcx(2) - 8, bcz(0) - 3 + 2, 1.35);      // 咖啡馆吧台
-      pick('book', bcx(3) + 2, bcz(2) - 3 - 4, 4.8);         // 写字楼二层
+      pick('book', OFFICE.x - 2.8, OFFICE.z - 5, 5.42);      // 写字楼二层办公桌
       pick('camera', bcx(3) + 6, bcz(4) - 3 + 1, 1.3);       // 公主公寓客厅
       pick('coin', G.W.viewDeck ? G.W.viewDeck.x : bcx(2), G.W.viewDeck ? G.W.viewDeck.z + 5 : bcz(5), 1.2);
       pick('donut', bcx(1) - 3, bcz(3) - 3 + 4, 1.3);
@@ -5816,6 +6535,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         '「楼上靠窗的位置一直空着，好像有人特意留的。」',
         '「常来啊，热可可永远给你留着。」'
       ]);
+
+      // —— 每栋建筑里的情侣小惊喜
+      if (G.Moments) G.Moments.build(this);
     },
 
     addNPC(scene, x, z, yaw, name, color, lines) {
@@ -5980,8 +6702,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
       // 室内补光跟随
       const inB = P.indoor || (G.Vehicles.driving ? false : false);
-      this.indoorLight.intensity = G.damp(this.indoorLight.intensity, inB ? 9 : 0, 4, dt);
-      this.indoorLight.position.set(P.pos.x, P.pos.y + 2.4, P.pos.z);
+      this.indoorLight.intensity = G.damp(this.indoorLight.intensity, inB ? 7.2 : 0, 4, dt);
+      this.indoorLight.position.set(P.pos.x, P.pos.y + 2.3, P.pos.z);
+      // 室内环境光（半球光：天空暖白 + 地面暖灰，模拟间接照明，室内不再发灰）
+      if (R.indoorHemi) {
+        R.indoorHemi.intensity = G.damp(R.indoorHemi.intensity, inB ? 0.92 : 0, 3.2, dt);
+        R.indoorHemi.position.set(P.pos.x, P.pos.y + 1.2, P.pos.z);
+        R.indoorHemi.visible = R.indoorHemi.intensity > 0.01;
+      }
+      // 浪漫粒子 / 惊喜动画
+      if (G.Moments) G.Moments.update(dt);
 
       if (this.clouds) {
         const t = this.time * 0.004;
