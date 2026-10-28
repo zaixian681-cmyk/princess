@@ -1641,6 +1641,23 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       return ZONES[bz][bx];
     },
     isWater(x, z) { return z > 236 && Math.abs(x) < 460; },
+    /* 脚下材质：室内木地板 / 石板人行道 / 沥青路面 / 草地 / 滨江木栈道 / 水 */
+    surfaceAt(x, z, indoor) {
+      if (indoor) return 'wood';
+      if (this.isWater(x, z)) return 'water';
+      if (z > 186 && z < 214 && Math.abs(x) < 212) return 'wood';   // 滨江木栈道
+      const bx = Math.floor((x - OFF) / P), bz = Math.floor((z - OFF) / P);
+      if (bx >= 0 && bx <= 5 && bz >= 0 && bz <= 5) {
+        const r = this.blockRect(bx, bz);
+        if (x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) {
+          const zone = ZONES[bz][bx];
+          if (zone === 'park') return 'grass';
+          if (zone === 'prom') return 'wood';
+          return 'stone';
+        }
+      }
+      return 'asphalt';
+    },
     init(scene) {
       this.scene = scene;
       this.MB = new G.MeshBuilder();
@@ -5034,6 +5051,29 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       if (this.ambFilter) this.ambFilter.frequency.setTargetAtTime(o.indoor ? 260 : 620, t, 0.7);
     },
 
+    /* 分材质的脚步：石板脆、木地板闷、草地软、沥青钝、水面溅 */
+    step(kind, gain) {
+      if (!this.ready) return;
+      const ctx = this.ctx, t = ctx.currentTime;
+      const cfg = {
+        stone: { dur: 0.085, freq: 1900, type: 'bandpass', q: 0.9, decay: 4.5, thump: 150, thumpG: 0.05, g: 1.0 },
+        wood: { dur: 0.11, freq: 760, type: 'lowpass', q: 1.1, decay: 3.4, thump: 105, thumpG: 0.075, g: 0.95 },
+        grass: { dur: 0.15, freq: 2700, type: 'highpass', q: 0.6, decay: 1.7, thump: 0, thumpG: 0, g: 0.5 },
+        asphalt: { dur: 0.09, freq: 1150, type: 'bandpass', q: 1.0, decay: 3.8, thump: 130, thumpG: 0.035, g: 0.95 },
+        water: { dur: 0.2, freq: 1400, type: 'lowpass', q: 0.7, decay: 1.4, thump: 0, thumpG: 0, g: 0.7 }
+      }[kind] || { dur: 0.09, freq: 1500, type: 'bandpass', q: 1, decay: 4, thump: 140, thumpG: 0.04, g: 1 };
+      const len = Math.max(64, Math.floor(ctx.sampleRate * cfg.dur));
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, cfg.decay);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = cfg.type; f.frequency.value = cfg.freq; f.Q.value = cfg.q;
+      const g = ctx.createGain(); g.gain.value = (gain || 0.11) * cfg.g;
+      src.connect(f); f.connect(g); g.connect(this.master);
+      src.start(t);
+      if (cfg.thumpG > 0) this.tone(cfg.thump, 0.075, 'sine', cfg.thumpG);
+    },
+
     tone(freq, dur, type, gain, slideTo) {
       if (!this.ready) return;
       const ctx = this.ctx, t = ctx.currentTime;
@@ -7245,7 +7285,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 248;
+  G.BUILD = 250;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
@@ -7672,10 +7712,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           }
           if (!V.driving) G.Audio.engine(0);
         }
-        // 脚步
-        if (P.onGround && P.speed > 1.2) {
+        // 脚步：按脚下材质发音，步幅跟着速度走
+        if (P.onGround && P.speed > 1.0) {
           this._stepAcc = (this._stepAcc || 0) + P.speed * dt;
-          if (this._stepAcc > 2.2) { this._stepAcc = 0; G.Audio.sfx('step'); }
+          const stride = P.running ? 2.75 : 2.05;
+          if (this._stepAcc > stride) {
+            this._stepAcc = 0;
+            const kind = G.W && G.W.surfaceAt ? G.W.surfaceAt(P.pos.x, P.pos.z, P.indoor) : 'stone';
+            const vol = 0.075 + Math.min(0.055, P.speed * 0.008);
+            G.Audio.step(kind, vol);
+          }
         }
       }
 
