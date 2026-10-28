@@ -1029,6 +1029,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const self = this;
       this.canvas = canvas;
       this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
+      // —— 后处理管线（离屏渲染 + 全屏合成）——
+      this._initPost();
       this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1127,6 +1129,87 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       this.moon.visible = false;
       this.scene.add(this.moon);
     },
+    _initPost() {
+      const T = THREE;
+      this.rt = new T.WebGLRenderTarget(2, 2, { minFilter: T.LinearFilter, magFilter: T.LinearFilter, format: T.RGBAFormat });
+      this.rt.depthBuffer = true;
+      this.rt.stencilBuffer = false;
+      this.postScene = new T.Scene();
+      this.postCam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      this.postMat = new T.ShaderMaterial({
+        uniforms: {
+          tDiffuse: { value: null },
+          uRes: { value: new T.Vector2(1, 1) },
+          uTime: { value: 0 },
+          uBloom: { value: 0.42 },
+          uVig: { value: 0.30 },
+          uGrain: { value: 0.022 },
+          uCA: { value: 0.0012 }
+        },
+        depthTest: false, depthWrite: false,
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+        fragmentShader: [
+          'varying vec2 vUv;',
+          'uniform sampler2D tDiffuse; uniform vec2 uRes; uniform float uTime, uBloom, uVig, uGrain, uCA;',
+          'vec3 samp(vec2 uv){ return texture2D(tDiffuse, uv).rgb; }',
+          'void main(){',
+          // 轻微色散（越靠边越明显）
+          '  vec2 d = vUv - 0.5;',
+          '  vec2 off = d * uCA * (0.6 + length(d));',
+          '  vec3 col;',
+          '  col.r = samp(vUv + off).r;',
+          '  col.g = samp(vUv).g;',
+          '  col.b = samp(vUv - off).b;',
+          // 亮部提取 + 十字模糊近似泛光
+          '  vec3 bright = vec3(0.0);',
+          '  vec2 px = 1.0 / uRes;',
+          '  for (int i = 0; i < 8; i++) {',
+          '    float a = float(i) * 0.785398;',
+          '    vec2 o = vec2(cos(a), sin(a)) * px * (3.0 + float(i) * 1.6);',
+          '    vec3 s2 = samp(vUv + o);',
+          '    bright += max(s2 - 0.62, 0.0);',
+          '  }',
+          '  bright /= 8.0;',
+          '  col += bright * uBloom;',
+          // 电影感：暗部偏青、亮部偏暖
+          '  float lum = dot(col, vec3(0.299, 0.587, 0.114));',
+          '  col = mix(col, col * vec3(0.94, 1.0, 1.06), (1.0 - lum) * 0.35);',
+          '  col = mix(col, col * vec3(1.05, 1.01, 0.96), lum * 0.22);',
+          // 对比和饱和
+          '  col = (col - 0.5) * 1.03 + 0.5;',
+          '  float g = dot(col, vec3(0.299, 0.587, 0.114));',
+          '  col = mix(vec3(g), col, 1.06);',
+          // 线性 → sRGB（离屏 RT 里是线性值，不转就会整体发黑）
+          '  col = pow(max(col, 0.0), vec3(0.4545));',
+          // 暗角
+          '  float v = smoothstep(1.15, 0.30, length(d) * 1.30);',
+          '  col *= mix(1.0, v, uVig);',
+          // 细颗粒
+          '  float n = fract(sin(dot(vUv * uRes + uTime, vec2(12.9898, 78.233))) * 43758.5453);',
+          '  col += (n - 0.5) * uGrain;',
+          '  gl_FragColor = vec4(max(col, 0.0), 1.0);',
+          '}'
+        ].join('\n')
+      });
+      const quad = new T.Mesh(new T.PlaneGeometry(2, 2), this.postMat);
+      quad.frustumCulled = false;
+      this.postScene.add(quad);
+      this.postOn = true;
+    },
+
+    renderPost(scene, camera) {
+      if (!this.postOn || !this.rt) { this.renderer.render(scene, camera); return; }
+      const r = this.renderer;
+      r.setRenderTarget(this.rt);
+      r.clear();
+      r.render(scene, camera);
+      r.setRenderTarget(null);
+      this.postMat.uniforms.tDiffuse.value = this.rt.texture;
+      this.postMat.uniforms.uRes.value.set(this.rt.width, this.rt.height);
+      this.postMat.uniforms.uTime.value = (performance.now() % 100000) / 1000;
+      r.render(this.postScene, this.postCam);
+    },
+
     onResize() {
       let w = Math.max(1, Math.round(innerWidth));
       let h = Math.max(1, Math.round(innerHeight));
@@ -1140,6 +1223,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       // 竖屏时增大垂直 FOV，避免横向视野过窄
       this.camera.fov = aspect >= 1 ? 62 : G.clamp(62 * Math.pow(1 / aspect, 0.42), 62, 92);
       this.camera.updateProjectionMatrix();
+      if (this.rt) this.rt.setSize(Math.max(2, Math.round(w * Math.min(devicePixelRatio, 2) * this.renderScale)),
+                                   Math.max(2, Math.round(h * Math.min(devicePixelRatio, 2) * this.renderScale)));
     },
     setRenderScale(s) {
       this.renderScale = G.clamp(s, 0.5, 1);
@@ -1148,6 +1233,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     applyQuality(q) {
       this.quality = q;
       const R2 = this.renderer;
+      // 后处理很吃填充率：低画质直接关掉，中画质减弱泛光
+      if (this.postOn !== undefined) {
+        this.postOn = (q !== 'low');
+        if (this.postMat) this.postMat.uniforms.uBloom.value = (q === 'medium' ? 0.28 : 0.42);
+      }
       if (q === 'low') { R2.shadowMap.enabled = false; this.sun.shadow.mapSize.set(512, 512); this.setRenderScale(0.72); }
       else if (q === 'medium') { R2.shadowMap.enabled = true; this.sun.shadow.mapSize.set(1024, 1024); this.setRenderScale(0.85); }
       else if (q === 'high') { R2.shadowMap.enabled = true; this.sun.shadow.mapSize.set(2048, 2048); this.setRenderScale(1); }
@@ -4833,8 +4923,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const priv = G.Private;
         const inHome = priv && x > priv.x0 - 0.6 && x < priv.x1 + 0.6 && z > priv.z0 - 0.6 && z < priv.z1 + 0.6;
         if (G.COL.pointSolid(x, 0.9, z) || inHome) {
-          x = p.g.position.x; z = p.g.position.z;      // 原地不动，等人绕开
-          p.cur = 0;
+          // 朝远离街区中心的方向推开 1.2m，沿墙绕过去，不要呆立
+          const dxo = x - p.cx, dzo = z - p.cz, dl = Math.hypot(dxo, dzo) || 1;
+          const px2 = x + dxo / dl * 1.3, pz2 = z + dzo / dl * 1.3;
+          if (!G.COL.pointSolid(px2, 0.9, pz2)) { x = px2; z = pz2; }
+          else { x = p.g.position.x; z = p.g.position.z; p.cur = 0; }
         }
         p.g.position.set(x, 0.18, z);
         // 朝向平滑（拐角不再瞬间转 90°），并产生侧倾
@@ -5082,6 +5175,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         car.stuck = 0;
         car.x = nx3;
         car.z = nz3;
+      }
+      // 车道约束：垂直于行进方向的那个坐标，永远锁在这条路的行车带里
+      const OFF2 = G.W.OFF - G.W.ROAD / 2, PW = G.W.P, HALF2 = G.W.ROAD / 2 - 1.8;
+      if (Math.abs(car.dir[0]) > Math.abs(car.dir[1])) {
+        const rc = OFF2 + Math.round((car.z - OFF2) / PW) * PW;
+        car.z = G.clamp(car.z, rc - HALF2, rc + HALF2);
+      } else {
+        const rc = OFF2 + Math.round((car.x - OFF2) / PW) * PW;
+        car.x = G.clamp(car.x, rc - HALF2, rc + HALF2);
       }
       // 简单避让边界
       if (Math.abs(car.x) > 210 || car.z > 205 || car.z < -210) {
@@ -7516,7 +7618,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 258;
+  G.BUILD = 261;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
@@ -7907,7 +8009,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           (window.__errs = window.__errs || []).push(String(err && err.message || err));
           console.error(err);
         }
-        R.renderer.render(R.scene, R.camera);
+        if (R.renderPost) R.renderPost(R.scene, R.camera); else R.renderer.render(R.scene, R.camera);
       };
       tick();
     },
