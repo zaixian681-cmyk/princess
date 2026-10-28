@@ -6361,11 +6361,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const P = G.Player;
       if (P) {
         const px = toX(P.pos.x), pz = toZ(P.pos.z);
+        // 视锥方向：直接用"前进向量"在地图坐标系里的角度（x→右、z→下）
+        // 前进向量 = (-sin(camYaw), -cos(camYaw))，地图角度 = atan2(vz, vx)
+        const va = Math.atan2(-Math.cos(P.camYaw), -Math.sin(P.camYaw));
+        const coneR = size * (mini ? 0.13 : 0.11);
+        ctx.fillStyle = 'rgba(255,157,196,.20)';
+        ctx.beginPath();
+        ctx.moveTo(px, pz);
+        ctx.arc(px, pz, coneR, va - 0.52, va + 0.52);
+        ctx.closePath();
+        ctx.fill();
+        // 箭头，明确"我正朝着这边看"
         ctx.save();
-        ctx.translate(px, pz);
-        ctx.rotate(Math.atan2(-Math.cos(P.camYaw), -Math.sin(P.camYaw)));   // 世界朝向 → 地图角度
-        ctx.fillStyle = 'rgba(255,157,196,.18)';
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, size * 0.12, -Math.PI / 2 - 0.55, -Math.PI / 2 + 0.55); ctx.closePath(); ctx.fill();
+        ctx.translate(px + Math.cos(va) * coneR, pz + Math.sin(va) * coneR);
+        ctx.rotate(va);
+        ctx.fillStyle = 'rgba(255,157,196,.95)';
+        ctx.beginPath(); ctx.moveTo(5, 0); ctx.lineTo(-4, 3.4); ctx.lineTo(-4, -3.4); ctx.closePath(); ctx.fill();
         ctx.restore();
         ctx.fillStyle = '#ff9dc4';
         ctx.beginPath(); ctx.arc(px, pz, mini ? 3.4 : 5, 0, 6.3); ctx.fill();
@@ -7198,7 +7209,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 245;
+  G.BUILD = 246;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
