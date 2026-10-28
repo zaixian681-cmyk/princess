@@ -2727,24 +2727,29 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     spawnTowerSign() {
       if (!G.roofSign || !this.doors || !this.doors.length) return null;
       const sp = this.spawn || { x: -33, z: -16 };
-      // 玩家出生时朝 +Z，就选"出生点正前方/身后"最近的那栋楼挂招牌
-      const aimX = sp.x, aimZ = sp.z + 30;
+      // 优先挂在出生点旁边那栋"最高、最显眼"的楼（就是广场角上带照片广告牌的那栋）
       const rectDist = (f, x, z) => Math.hypot(
         Math.max(f.x0 - x, 0, x - f.x1), Math.max(f.z0 - z, 0, z - f.z1));
-      let fp = null, bd = 1e9;
+      let fp = null, bestScore = -1e9;
       for (const f of this.footprints) {
-        if ((f.top || 0) < 6) continue;
-        const d = rectDist(f, aimX, aimZ);
-        if (d < bd) { bd = d; fp = f; }
+        const top = f.top || 0;
+        const d = rectDist(f, sp.x, sp.z);
+        if (d > 60) continue;
+        // 越近越好、越高的优先
+        const score = (top * 1.6) - d;
+        if (score > bestScore) { bestScore = score; fp = f; }
       }
       if (!fp) return null;
       const cx = (fp.x0 + fp.x1) / 2, cz = (fp.z0 + fp.z1) / 2;
       const top = fp.top || 14;
-      // 招牌朝出生点
+      // 招牌朝出生点，并且挪到屋顶靠出生点那一侧的檐口上方
       const rotY = Math.atan2(sp.x - cx, sp.z - cz);
-      G.roofSign(this.scene, cx, top, cz, '山雨辰小公主大厦',
-        { w: Math.min(19, (fp.x1 - fp.x0) * 0.92), h: 3.2, stand: 1.4, rotY, glow: 1.5 });
-      return { x: Math.round(cx), z: Math.round(cz), top, dist: Math.round(bd) };
+      const dx = Math.sin(rotY), dz = Math.cos(rotY);
+      const hd = Math.max((fp.x1 - fp.x0), (fp.z1 - fp.z0)) / 2 - 2.6;
+      const sx = cx + dx * hd, sz = cz + dz * hd;
+      G.roofSign(this.scene, sx, top, sz, '山雨辰小公主大厦',
+        { w: Math.min(22, (fp.x1 - fp.x0) * 1.02), h: 3.6, stand: 3.0, rotY, glow: 1.9 });
+      return { x: Math.round(cx), z: Math.round(cz), top, dist: Math.round(rectDist(fp, sp.x, sp.z)) };
     },
 
     finish() {
@@ -6868,7 +6873,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 230;
+  G.BUILD = 235;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
