@@ -1537,6 +1537,32 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.soft(), color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
       halo.scale.setScalar(1.1);
       g.add(halo);
+      // 主线任务物品：加一根光柱 + 悬浮箭头，远一点也能看见
+      const isQuest = !!(def && def.quest);
+      if (isQuest) {
+        const col = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.42, 0.85, 16, 10, 1, true),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.20, side: THREE.DoubleSide, depthWrite: false, fog: false })
+        );
+        col.position.y = 8.4;
+        g.add(col);
+        const arrow = new THREE.Mesh(
+          new THREE.ConeGeometry(0.26, 0.52, 6),
+          new THREE.MeshBasicMaterial({ color: 0xffd166, fog: false })
+        );
+        arrow.position.y = 1.05;
+        arrow.rotation.x = Math.PI;
+        g.add(arrow);
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(0.42, 0.6, 20),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, fog: false })
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = -0.36;
+        g.add(ring);
+        g.scale.setScalar(1.25);
+        opt.questGlow = true;
+      }
       const entry = {
         kind: 'pickup', item: opt.item, qty: opt.qty || 1, x: opt.x, y: (opt.y || 0.9), z: opt.z,
         label: '拾取 ' + (def.name || '物品'), mesh: g, baseY: opt.y || 0.9, t: Math.random() * 6
@@ -6337,7 +6363,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const px = toX(P.pos.x), pz = toZ(P.pos.z);
         ctx.save();
         ctx.translate(px, pz);
-        ctx.rotate(-P.camYaw + Math.PI);
+        ctx.rotate(Math.atan2(-Math.cos(P.camYaw), -Math.sin(P.camYaw)));   // 世界朝向 → 地图角度
         ctx.fillStyle = 'rgba(255,157,196,.18)';
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, size * 0.12, -Math.PI / 2 - 0.55, -Math.PI / 2 + 0.55); ctx.closePath(); ctx.fill();
         ctx.restore();
@@ -6372,7 +6398,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         hint: '梧桐公寓在城西，门口台阶旁边有个小东西在发光',
         check() { return G.Inv && G.Inv.count('key') > 0; },
         done: '拿到钥匙了 · 公寓在城西，进去看看二楼',
-        at() { const a = G.W.enterables && G.W.enterables.apartment; return a ? { x: (a.x0 + a.x1) / 2, z: a.z1 + 4, label: '梧桐公寓' } : null; }
+        at() {
+          const k = G.Items && G.Items.pickups && G.Items.pickups.find(q => q.item === 'key');
+          if (k) return { x: k.x, z: k.z, label: '黄铜钥匙' };
+          const a = G.W.enterables && G.W.enterables.apartment;
+          return a ? { x: (a.x0 + a.x1) / 2, z: a.z1 + 4, label: '梧桐公寓' } : null;
+        }
       },
       {
         id: 'home', goal: '上梧桐公寓二楼，看看窗边留下的字条',
@@ -7167,7 +7198,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 243;
+  G.BUILD = 245;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
