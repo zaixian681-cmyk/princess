@@ -1831,6 +1831,25 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
 
       this.doors.push({ x: dx, z: dz });
+      // 入口标识：发光门框 + 门楣灯带 + 迎宾地垫（每条街都能一眼看到门在哪）
+      {
+        const nz = (face === 's') ? 1 : (face === 'n') ? -1 : 0;
+        const nx = (face === 'e') ? 1 : (face === 'w') ? -1 : 0;
+        const off = 0.14;
+        for (const k of [-1, 1]) {
+          const jx = dx + (nz !== 0 ? k * (doorW / 2 + 0.16) : nx * off);
+          const jz = dz + (nx !== 0 ? k * (doorW / 2 + 0.16) : nz * off);
+          MB.box('lampIn', jx, 1.55, jz, 0.15, 3.0, 0.15, 0xfff2d8, 1);
+        }
+        MB.box('lampIn', dx + nx * off, 3.1, dz + nz * off,
+          nz !== 0 ? doorW + 0.5 : 0.15, 0.13, nz !== 0 ? 0.15 : doorW + 0.5, 0xfff2d8, 1);
+        // 门口地垫
+        MB.box('plaster', dx + nx * 0.95, 0.235, dz + nz * 0.95,
+          nz !== 0 ? 2.3 : 1.35, 0.035, nz !== 0 ? 1.35 : 2.3, 0xb8546a, 2);
+        // 门内一点点暖光带（视觉引导，不用真实光源）
+        MB.box('lampIn', dx - nx * 0.6, 0.3, dz - nz * 0.6,
+          nz !== 0 ? 2.4 : 0.2, 0.06, nz !== 0 ? 0.2 : 2.4, 0xffe9c8, 1);
+      }
       // 记录门扇：铰链位置、基准朝向、内开方向
       {
         const dw = doorW - 0.16, dh = 2.86;
@@ -6369,7 +6388,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 214;
+  G.BUILD = 215;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
