@@ -1426,6 +1426,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   };
 
   /* ---------------- 世界中的拾取物 / 线索 ---------------- */
+  // 如果落点在实体里（墙/家具），螺旋找一个空位，避免拾取物被埋住
+  function freeSpot(x, y, z) {
+    if (!G.COL || !G.COL.pointSolid) return { x, y, z };
+    if (!G.COL.pointSolid(x, y, z)) return { x, y, z };
+    for (let r = 0.6; r <= 3.4; r += 0.55) {
+      for (let a = 0; a < 8; a++) {
+        const ang = a * Math.PI / 4;
+        const nx = x + Math.cos(ang) * r, nz = z + Math.sin(ang) * r;
+        if (!G.COL.pointSolid(nx, y, nz)) return { x: nx, y, z: nz };
+      }
+    }
+    return { x, y, z };   // 找不到空位就保持原位（不要抬到天花板里）
+  }
+
   const Items = G.Items = {
     pickups: [],
     spawn(scene, opt) {
@@ -1450,7 +1464,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           g.add(ring);
         }
       }
-      g.position.set(opt.x, opt.y || 0.9, opt.z);
+      const sp = freeSpot(opt.x, opt.y || 0.9, opt.z);
+      opt.x = sp.x; opt.y = sp.y; opt.z = sp.z;
+      g.position.set(sp.x, sp.y, sp.z);
       scene.add(g);
       // 光晕
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.soft(), color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -1472,7 +1488,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.soft(), color: 0xffd9a0, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
       halo.scale.setScalar(1.4);
       g.add(halo);
-      g.position.set(opt.x, opt.y || 1.2, opt.z);
+      const sp2 = freeSpot(opt.x, opt.y || 1.2, opt.z);
+      opt.x = sp2.x; opt.y = sp2.y; opt.z = sp2.z;
+      g.position.set(sp2.x, sp2.y, sp2.z);
       scene.add(g);
       const entry = { kind: 'clue', x: opt.x, y: opt.y || 1.2, z: opt.z, label: '拾取留言：' + opt.title, title: opt.title, text: opt.text, mesh: g, baseY: opt.y || 1.2, t: Math.random() * 6 };
       I.add(entry);
@@ -1517,7 +1535,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
   const W = G.World = {
     BLOCK, ROAD, P, OFF, HALF, ZONES,
-    meshes: [], signs: [], lamps: [], envMeshes: [], doors: [], footprints: [],
+    meshes: [], signs: [], lamps: [], envMeshes: [], doors: [], doorSpecs: [], footprints: [],
     bx: (bx) => OFF + bx * P,                 // 街区左上角
     bc: (bx) => OFF + bx * P + BLOCK / 2,     // 街区中心
     nearAnyDoor(x, z, r) {
@@ -1811,6 +1829,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
 
       this.doors.push({ x: dx, z: dz });
+      // 记录门扇：铰链位置、基准朝向、内开方向
+      {
+        const dw = doorW - 0.16, dh = 2.86;
+        let hx, hz, base, open;
+        if (face === 's') { hx = cx - doorW / 2 + 0.08; hz = z1 + 0.02; base = 0; open = 1; }
+        else if (face === 'n') { hx = cx - doorW / 2 + 0.08; hz = z0 - 0.02; base = 0; open = -1; }
+        else if (face === 'e') { hx = x1 + 0.02; hz = cz - doorW / 2 + 0.08; base = -Math.PI / 2; open = -1; }
+        else { hx = x0 - 0.02; hz = cz - doorW / 2 + 0.08; base = -Math.PI / 2; open = 1; }
+        this.doorSpecs.push({ x: hx, z: hz, y: 0.22, w: dw, h: dh, base, open, a: 0, target: 0 });
+      }
       this.footprints.push({ x0, x1, z0, z1 });
 
       // 楼底接触阴影（让建筑"坐"在地面上）
@@ -1832,75 +1860,149 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       this.wallZ(z0 + 1.2, z1 - 1.2, midX, H, 0.18, 'plaster', 0xf3eee6,
         [{ a: cz - 1.2, b: cz + 1.2 }]);
 
-      // 室内布局：按楼层用途分模板
-      const fx = cx - w * 0.28, fz = cz + d * 0.22;
+      // ===== 室内陈设（统一以地板 FY 为基准，格位摆放避免穿模）=====
+      const FY = 0.22;                       // 地板顶面
+      const ix0 = x0 + t + 0.5, ix1 = x1 - t - 0.5;
+      const iz0 = z0 + t + 0.5, iz1 = z1 - t - 0.5;
+      const iw = Math.max(4, ix1 - ix0), id = Math.max(4, iz1 - iz0);
+      const icx = (ix0 + ix1) / 2, icz = (iz0 + iz1) / 2;
+      const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+
+      const shelfUnit = (sx, sz, sw, sh, rot) => {
+        const dz = Math.cos(rot) > 0.5 ? 0.45 : 0.45;
+        MB.box('wood', sx, FY + sh / 2, sz, sw, sh, 0.45, 0x9d7a55, 2);
+        for (let t2 = 1; t2 <= 3; t2++) {
+          const yy = FY + sh * (t2 / 3.4);
+          MB.box('wood', sx, yy, sz, sw - 0.12, 0.06, 0.42, 0xb98d62, 2);
+          // 每层摆商品
+          const n = Math.max(2, Math.floor(sw / 0.5));
+          for (let g = 0; g < n; g++) {
+            const gx = sx - sw / 2 + 0.3 + g * ((sw - 0.6) / Math.max(1, n - 1));
+            const c = [0xff8fa3, 0xffd166, 0x8fd3ff, 0xa3e88f, 0xffb26b, 0xd8a3ff][(g + t2) % 6];
+            MB.box('plaster', gx, yy + 0.12, sz + 0.02, 0.26, 0.22, 0.3, c, 1);
+          }
+        }
+      };
+      const flowerStand = (sx, sz, sw) => {
+        // 三层花架 + 花束
+        for (let t2 = 0; t2 < 3; t2++) {
+          const yy = FY + 0.35 + t2 * 0.42;
+          MB.box('wood', sx, yy, sz, sw, 0.07, 0.7, 0x9d7a55, 2);
+          for (let k = 0; k < 3; k++) {
+            const gx = sx - sw / 2 + 0.4 + k * ((sw - 0.8) / 2);
+            const c = [0xff6f91, 0xffd166, 0xc792ff, 0xffffff, 0xff9d6e, 0x8fd3ff][(t2 * 3 + k) % 6];
+            MB.box('metal', gx, yy + 0.16, sz, 0.14, 0.24, 0.14, 0xdfe3e8, 1);   // 花瓶
+            MB.box('leaf', gx, yy + 0.4, sz, 0.3, 0.3, 0.3, c, 1);               // 花束
+            MB.box('leaf', gx, yy + 0.55, sz - 0.1, 0.18, 0.18, 0.18, 0x4f8a3d, 1);
+          }
+        }
+        MB.box('wood', sx - sw / 2 + 0.08, FY + 0.65, sz, 0.1, 1.3, 0.7, 0x8a6547, 2);
+        MB.box('wood', sx + sw / 2 - 0.08, FY + 0.65, sz, 0.1, 1.3, 0.7, 0x8a6547, 2);
+      };
+      const deskUnit = (dx, dz, dw) => {
+        MB.box('wood', dx, FY + 0.74, dz, dw, 0.08, 0.85, 0xc9a97f, 2);
+        for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          MB.box('metal', dx + ox * (dw / 2 - 0.12), FY + 0.37, dz + oz * 0.35, 0.07, 0.74, 0.07, 0xa8adb4, 1);
+        }
+        MB.box('dark', dx, FY + 1.05, dz - 0.22, 0.6, 0.42, 0.05, 0x262a30, 1);
+        MB.box('metal', dx, FY + 0.4, dz, dw - 0.3, 0.6, 0.06, 0x8b9199, 1);
+      };
+      const softSeat = (sx, sz, sw, col) => {
+        MB.box('plaster', sx, FY + 0.22, sz, sw, 0.34, 0.95, col, 2);
+        MB.box('plaster', sx, FY + 0.52, sz - 0.36, sw, 0.45, 0.24, col, 2);
+        MB.box('plaster', sx, FY + 0.44, sz + 0.12, sw - 0.2, 0.12, 0.7, 0xf2e6ee, 2);
+      };
+
       const layout = (zone === 'cbd' || zone === 'office') ? 'office'
-        : zone === 'comm' ? (Math.random() < 0.5 ? 'shop' : 'cafe')
-          : (Math.random() < 0.6 ? 'home' : 'store');
-      if (layout === 'office') {
-        // 前台 + 两组工位 + 屏风
-        MB.box('wood', cx + w * 0.24, 0.6, cz + d * 0.28, 3.4, 1.2, 0.9, 0xd9c4a6, 2);
-        MB.box('dark', cx + w * 0.24, 1.62, cz + d * 0.28, 2.2, 0.72, 0.08, 0x1e2228, 1);
-        for (let i = 0; i < 2; i++) {
-          const ox = cx - w * 0.26 + i * 2.6, oz = cz - d * 0.22;
-          MB.box('wood', ox, 0.74, oz, 1.8, 0.1, 0.9, 0xc9a97f, 2);
-          MB.box('metal', ox, 0.38, oz, 1.6, 0.72, 0.08, 0xa8adb4, 1);
-          MB.box('dark', ox, 1.12, oz - 0.34, 0.72, 0.46, 0.05, 0x262a30, 1);
+        : zone === 'comm' ? (Math.random() < 0.5 ? 'flower' : 'shop')
+          : (Math.random() < 0.55 ? 'home' : 'store');
+
+      if (layout === 'flower') {
+        // 花店：整面花架 + 展台 + 收银
+        flowerStand(ix0 + 0.9, icz - id * 0.15, Math.min(2.6, iw * 0.35));
+        if (iw > 12) flowerStand(ix1 - 0.9, icz + id * 0.2, Math.min(2.6, iw * 0.3));
+        // 中央展台
+        MB.box('wood', icx + 0.6, FY + 0.45, icz + 0.4, 2.4, 0.9, 1.2, 0xcbb08a, 2);
+        for (let k = 0; k < 4; k++) {
+          const c = [0xff6f91, 0xffd166, 0xc792ff, 0xffffff][k];
+          MB.box('metal', icx - 0.2 + k * 0.55, FY + 1.02, icz + 0.4, 0.18, 0.22, 0.18, 0xdfe3e8, 1);
+          MB.box('leaf', icx - 0.2 + k * 0.55, FY + 1.24, icz + 0.4, 0.3, 0.26, 0.3, c, 1);
         }
-        MB.box('plaster', cx - w * 0.1, 1.05, cz, 0.12, 2.0, d * 0.5, 0xe9e3d8, 2);
+        MB.box('wood', icx + 0.4, FY + 1.05, icz - id * 0.28, 3.0, 1.2, 0.7, 0xa87f57, 2);
+        MB.box('metal', icx + 1.4, FY + 1.75, icz - id * 0.28, 0.5, 0.3, 0.4, 0xc9ccd2, 1);
       } else if (layout === 'shop') {
-        // 货架两排 + 收银台
-        for (let r = 0; r < 2; r++) for (let k = 0; k < 3; k++) {
-          MB.box('wood', cx - w * 0.2 + k * 1.9, 0.95, cz - d * 0.18 + r * 2.2, 1.6, 1.7, 0.5, 0x9d7a55, 2);
-          MB.box('plaster', cx - w * 0.2 + k * 1.9, 1.55, cz - d * 0.18 + r * 2.2, 1.3, 0.24, 0.3,
-            [0xff8fa3, 0xffd166, 0x8fd3ff][k]);
+        // 商铺：两排货架 + 收银台
+        const rows = Math.min(2, Math.max(1, Math.floor(id / 5)));
+        for (let r = 0; r < rows; r++) {
+          const sz = iz0 + 2.2 + r * 2.6;
+          const n = Math.max(1, Math.floor(iw / 2.4));
+          for (let k = 0; k < n; k++) {
+            const sx = ix0 + 1.2 + k * 2.4;
+            if (sx + 0.9 > ix1 - 1.2) break;
+            shelfUnit(sx, sz, 1.9, 1.75, 0);
+          }
         }
-        MB.box('wood', cx + w * 0.28, 0.55, cz + d * 0.26, 3.0, 1.1, 0.9, 0xe0cdb2, 2);
-        MB.box('metal', cx + w * 0.28, 1.22, cz + d * 0.26, 0.6, 0.3, 0.4, 0xc9ccd2, 1);
-      } else if (layout === 'cafe') {
-        // 双人桌 + 吧台
-        MB.box('wood', cx - w * 0.22, 0.72, cz, 1.1, 0.08, 1.1, 0xb98d62, 2);
-        MB.box('metal', cx - w * 0.22, 0.36, cz, 0.12, 0.72, 0.12, 0xa8adb4, 1);
-        MB.box('wood', cx + w * 0.24, 0.95, cz + d * 0.22, 3.6, 1.9, 0.7, 0x8a6547, 2);
-        MB.box('wood', cx + w * 0.24, 1.95, cz + d * 0.22, 3.7, 0.14, 0.8, 0x4a3a2e, 2);
+        MB.box('wood', ix1 - 2.2, FY + 0.5, iz1 - 2.4, 3.0, 1.0, 0.9, 0xe0cdb2, 2);
+        MB.box('metal', ix1 - 1.2, FY + 1.2, iz1 - 2.4, 0.55, 0.32, 0.4, 0xc9ccd2, 1);
+      } else if (layout === 'office') {
+        // 办公室：前台 + 2×2 工位 + 会议桌
+        MB.box('wood', icx + iw * 0.22, FY + 0.55, iz1 - 2.2, 3.2, 1.1, 0.9, 0xd9c4a6, 2);
+        MB.box('dark', icx + iw * 0.22, FY + 1.4, iz1 - 2.2, 2.0, 0.6, 0.06, 0x1e2228, 1);
+        for (let r = 0; r < 2; r++) for (let k = 0; k < 2; k++) {
+          const dx = ix0 + 2.4 + k * 3.4, dz = iz0 + 2.2 + r * 3.0;
+          if (dx + 1.5 > ix1 - 1.2) continue;
+          deskUnit(dx, dz, 2.2);
+          MB.box('metal', dx, FY + 0.25, dz + 0.85, 0.9, 0.5, 0.08, 0x8b9199, 1);
+        }
+        if (id > 12) {
+          MB.box('wood', icx, FY + 0.76, icz + id * 0.22, 3.4, 0.1, 1.6, 0xbfa07c, 2);
+          for (const [ox, oz] of [[-1.2, -1.1], [1.2, -1.1], [-1.2, 1.1], [1.2, 1.1]]) {
+            MB.box('metal', icx + ox, FY + 0.38, icz + id * 0.22 + oz, 0.1, 0.74, 0.1, 0xa8adb4, 1);
+          }
+        }
       } else if (layout === 'store') {
-        // 仓储：纸箱堆 + 托盘
-        for (let i = 0; i < 4; i++) {
-          MB.box('wood', cx - w * 0.24 + (i % 2) * 1.6, 0.42 + ((i / 2) | 0) * 0.85, cz + d * 0.2, 1.2, 0.8, 1.0, 0xb08a63, 2);
+        // 仓储：托盘 + 纸箱堆
+        for (let r = 0; r < 2; r++) for (let k = 0; k < 3; k++) {
+          const sx = ix0 + 1.4 + k * 2.2, sz = iz0 + 2.0 + r * 3.2;
+          if (sx + 0.7 > ix1 - 0.6) continue;
+          MB.box('metal', sx, FY + 0.08, sz, 1.6, 0.16, 1.2, 0x8f959c, 2);
+          for (let b = 0; b < 2; b++) {
+            MB.box('wood', sx - 0.3, FY + 0.5 + b * 0.8, sz, 0.9, 0.75, 0.85, 0xb08a63, 2);
+            MB.box('wood', sx + 0.5, FY + 0.45 + b * 0.8, sz + 0.1, 0.7, 0.65, 0.7, 0xc09a72, 2);
+          }
         }
-        MB.box('metal', cx + w * 0.2, 0.12, cz, 2.4, 0.16, 1.6, 0x8f959c, 2);
       } else {
-        // 居家：沙发 + 茶几 + 书柜 + 地毯
-        MB.box('plaster', cx - w * 0.24, 0.42, cz + d * 0.16, 2.8, 0.78, 1.0, 0xb9a9c9, 2);
-        MB.box('plaster', cx - w * 0.24, 0.72, cz + d * 0.16 - 0.4, 2.8, 0.5, 0.24, 0xa797b7, 2);
-        MB.box('wood', cx - w * 0.24, 0.42, cz + d * 0.02, 1.2, 0.44, 0.7, 0xb08a63, 2);
-        MB.box('wood', cx - w * 0.24, 1.05, cz - d * 0.2, 2.0, 2.0, 0.4, 0x9d7a55, 2);
-        MB.box('plaster', cx - w * 0.24, 0.03, cz + d * 0.08, 4.0, 0.05, 3.0, 0xe0c9d2, 2);
-      }
-      // 补充陈设
-      MB.box('wood', fx - 2.0, 0.42, fz + 1.4, 1.0, 0.84, 0.6, 0xa87f57, 2);
-      MB.box('plaster', fx + 0.2, 0.32, fz - 1.2, 1.6, 0.34, 0.9, 0xd8c2cf, 2);
-      MB.box('dark', cx, H - 0.95, z0 + 0.6, 2.2, 0.7, 0.06, 0x24282e, 1);
-      // 绿植 + 顶灯
-      MB.box('leaf', x1 - 1.6, 0.9, z1 - 1.6, 0.9, 1.3, 0.9, 0x4f8a3d, 2);
-      MB.box('leaf', x0 + 1.6, 0.9, z0 + 1.6, 0.9, 1.3, 0.9, 0x4f8a3d, 2);
-      for (let i = -1; i <= 1; i += 2) {
-        MB.box('lampIn', cx + i * w * 0.2, H - 0.34, cz, 1.6, 0.1, 0.5, 0xfff0d0, 1);
-        MB.box('lampIn', cx, H - 0.34, cz + i * d * 0.26, 1.2, 0.08, 0.4, 0xfff0d0, 1);
+        // 居家：沙发 + 电视 + 茶几 + 书柜 + 地毯
+        softSeat(ix0 + 1.8, icz + 1.0, 2.6, 0xb9a9c9);
+        MB.box('plaster', ix0 + 1.8, FY + 0.01, icz + 2.3, 3.6, 0.04, 2.4, 0xe0c9d2, 2);
+        MB.box('wood', ix0 + 1.8, FY + 0.32, icz + 2.3, 1.2, 0.4, 0.7, 0xb08a63, 2);
+        MB.box('dark', ix0 + 1.8, FY + 0.9, iz0 + 0.6, 2.2, 0.95, 0.08, 0x20242a, 1);
+        MB.box('wood', ix1 - 1.6, FY + 0.9, icz, 0.45, 1.8, 1.6, 0x9d7a55, 2);
+        MB.box('wood', icx + 1.2, FY + 0.4, iz1 - 2.0, 1.6, 0.8, 0.8, 0xa87f57, 2);
       }
 
-      // 可互动：座椅 + 部分楼层有留言
+      // 通用：墙面挂画、绿植、顶灯
+      MB.box('dark', ix0 + iw * 0.5, FY + 1.7, iz0 + 0.06, 1.4, 0.95, 0.06, 0x2a3038, 1);
+      MB.box('plaster', ix0 + iw * 0.5, FY + 1.7, iz0 + 0.1, 1.2, 0.8, 0.03, 0x9fc0d8, 1);
+      MB.box('leaf', ix1 - 1.0, FY + 0.55, iz0 + 1.0, 0.7, 1.1, 0.7, 0x4f8a3d, 2);
+      MB.box('concrete', ix1 - 1.0, FY + 0.25, iz0 + 1.0, 0.5, 0.5, 0.5, 0xd8d2c4, 1);
+      for (const lx of [-0.28, 0.28]) {
+        MB.box('lampIn', icx + lx * iw * 0.5, H - 0.32, icz, 1.4, 0.1, 0.5, 0xfff0d0, 1);
+      }
+
+      // 可互动
       G.Interact && G.Interact.add({
-        kind: 'sit', x: fx, y: 0.75, z: fz, label: '坐下歇一会儿', rot: Math.random() * 6.28
+        kind: 'sit', x: icx, y: FY + 0.5, z: icz + 1.0, label: '坐下歇一会儿', rot: Math.random() * 6.28
       });
-      if (Math.random() < 0.45) {
+      if (Math.random() < 0.5) {
         G.Interact.add({
-          kind: 'note', x: x0 + 2.2, y: 1.5, z: z0 + 0.7, label: '看看墙上的告示',
+          kind: 'note', x: ix0 + 1.2, y: FY + 1.3, z: iz0 + 0.35, label: '看看墙上的告示',
           title: '楼里的告示',
           msg: ['「本楼顶层能看到整片江，欢迎上去看看。」', '「电梯维修中，请走楼梯——虽然这里还没有楼梯。」', '「如果你看到这里，说明你真的喜欢到处乱逛。」'][(Math.random() * 3) | 0]
         });
       }
     },
+
     wallX(x0, x1, z, H, t, key, color, gaps) {
       const MB = this.MB;
       gaps = (gaps || []).slice().sort((a, b) => a.a - b.a);
@@ -2445,6 +2547,39 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         scene.add(m);
         this.meshes.push(m);
       }
+      // 门扇（一个 InstancedMesh，全部楼共用）
+      if (this.doorSpecs.length) {
+        const wDoor = this.doorSpecs[0].w, hDoor = this.doorSpecs[0].h;
+        // 几何体以铰链为原点：箱体向右平移半个宽度
+        const gDoor = new THREE.BoxGeometry(wDoor, hDoor, 0.09);
+        gDoor.translate(wDoor / 2, 0, 0);
+        // 门把手（同一几何体里，跟着门扇转）
+        const gHandle = new THREE.BoxGeometry(0.07, 0.07, 0.2);
+        gHandle.translate(wDoor - 0.18, -0.05, 0.09);
+        const merged = new THREE.BufferGeometry();
+        // 手动合并两个几何体
+        const pos = [], nor = [], idx = [];
+        let off = 0;
+        for (const gg of [gDoor, gHandle]) {
+          const p = gg.attributes.position.array, n = gg.attributes.normal.array;
+          for (let i = 0; i < p.length; i++) pos.push(p[i]);
+          for (let i = 0; i < n.length; i++) nor.push(n[i]);
+          const ix = gg.index.array;
+          for (let i = 0; i < ix.length; i++) idx.push(ix[i] + off);
+          off += gg.attributes.position.count;
+        }
+        merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        merged.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+        merged.setIndex(idx);
+        const matDoor = new THREE.MeshStandardMaterial({ color: 0x6b5540, roughness: 0.55, metalness: 0.35 });
+        const inst = new THREE.InstancedMesh(merged, matDoor, this.doorSpecs.length);
+        inst.castShadow = true; inst.receiveShadow = true;
+        inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.scene.add(inst);
+        this.doorInst = inst;
+        this.updateDoorMatrices(0);
+      }
+
       // 路灯辉光（一个 Points，一次 draw call）
       const lampGeo = new THREE.BufferGeometry();
       const pos = new Float32Array(this.lamps.length * 3), col = new Float32Array(this.lamps.length * 3);
@@ -2477,6 +2612,40 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       m['sigB'].emissiveIntensity = 1.7;
       G.signalNS = nsGreen; G.signalEW = ewGreen;
       G.signalPhase = phase;
+    },
+
+    /* 门：靠近自动开启，离开缓缓关上 */
+    updateDoors(px, pz, dt) {
+      if (!this.doorInst) return;
+      const specs = this.doorSpecs;
+      let changed = false;
+      for (let i = 0; i < specs.length; i++) {
+        const d = specs[i];
+        const dist = Math.hypot(px - d.x, pz - d.z);
+        const want = dist < 3.4 ? 1 : 0;
+        if (d.target !== want) d.target = want;
+        const speed = want ? 5.5 : 2.2;
+        if (Math.abs(d.a - want) > 0.001) {
+          d.a += (want - d.a) * Math.min(1, dt * speed);
+          if (Math.abs(d.a - want) < 0.004) d.a = want;
+          changed = true;
+        }
+      }
+      if (changed) this.updateDoorMatrices(0);
+    },
+    updateDoorMatrices() {
+      const inst = this.doorInst; if (!inst) return;
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
+      const up = new THREE.Vector3(0, 1, 0);
+      for (let i = 0; i < this.doorSpecs.length; i++) {
+        const d = this.doorSpecs[i];
+        const ang = d.base + d.open * d.a * 1.55;   // 约 89°
+        q.setFromAxisAngle(up, ang);
+        p.set(d.x, d.y + d.h / 2, d.z);
+        m.compose(p, q, sv);
+        inst.setMatrixAt(i, m);
+      }
+      inst.instanceMatrix.needsUpdate = true;
     },
 
     /* 夜间发光强度 */
@@ -2672,6 +2841,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     hWall(MB, x0, x1, z1, y0, h, t, style, color, southGaps);
     vWall(MB, z0, z1, x0, y0, h, t, style, color, []);
     vWall(MB, z0, z1, x1, y0, h, t, style, color, []);
+    // 门扇（交给全城统一的实例化门系统）
+    if (G.W && G.W.doorSpecs) {
+      G.W.doorSpecs.push({
+        x: doorX - doorW / 2 + 0.08, z: z1 + 0.02, y: y0, w: doorW - 0.16, h: 2.86,
+        base: 0, open: 1, a: 0, target: 0
+      });
+    }
     // 门框
     box(MB, 'metal', doorX - doorW / 2 - 0.12, y0 + 1.4, z1, 0.16, 2.8, t + 0.1, 0xb9c0c8);
     box(MB, 'metal', doorX + doorW / 2 + 0.12, y0 + 1.4, z1, 0.16, 2.8, t + 0.1, 0xb9c0c8);
@@ -2765,23 +2941,66 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     info.door = { x: cx, z: cz + d / 2 };
     slab(MB, s.x0, s.z0, s.x1, s.z1, y0, 0.2, 'tile', 0xe6e2d8);
     slab(MB, s.x0, s.z0, s.x1, s.z1, y0 + h, 0.25, 'plaster', 0xf2efe6);
-    // 货架
-    for (let i = 0; i < 3; i++) shelf(MB, cx - 6 + i * 3.4, cz - 2.5, 2.8, 0, 2.0);
-    counter(MB, cx + 6.5, cz + 3.0, 4.2, 1.0, 1.0, 0xcfd6dc);
-    box(MB, 'metal', cx + 7.6, y0 + 1.2, cz + 3.0, 0.6, 0.35, 0.5, 0xb9c0c8);
-    fridge(MB, cx - 7.5, cz + 4.2, 0);
-    // 商品（发光小方块）
-    for (let i = 0; i < 12; i++) {
-      const gx = cx - 7.2 + (i % 4) * 1.1, gz = cz - 3.4 + ((i / 4) | 0) * 1.6;
-      const c = [0xff8fa3, 0xffd166, 0x8fd3ff, 0xa3e88f][i % 4];
-      box(MB, 'plaster', gx, y0 + 0.75 + (i % 3) * 0.5, gz, 0.3, 0.36, 0.26, c);
+
+    const F = y0;   // 地板顶面
+
+    // —— 三排货架（每排 4 层，逐层摆满商品）
+    for (let r = 0; r < 3; r++) {
+      const sz = s.z0 + 3.0 + r * 2.6;
+      const sw = 7.4;
+      const sx = cx - 3.2;
+      MB.box('metal', sx, F + 0.9, sz, sw, 1.8, 0.5, 0xb8bec6, 2);
+      MB.box('wood', sx, F + 1.82, sz, sw + 0.1, 0.08, 0.56, 0x9d7a55, 2);
+      for (let t2 = 0; t2 < 4; t2++) {
+        const yy = F + 0.28 + t2 * 0.44;
+        MB.box('wood', sx, yy, sz, sw - 0.16, 0.05, 0.48, 0xb98d62, 2);
+        const n = 9;
+        for (let g = 0; g < n; g++) {
+          const gx = sx - sw / 2 + 0.45 + g * ((sw - 0.9) / (n - 1));
+          const c = [0xff8fa3, 0xffd166, 0x8fd3ff, 0xa3e88f, 0xffb26b, 0xd8a3ff, 0xf7f7f2][(g + t2 * 2) % 7];
+          MB.box('plaster', gx, yy + 0.13, sz + 0.02, 0.28, 0.24, 0.34, c, 1);
+        }
+      }
+      // 价格牌
+      MB.box('lamp', sx, F + 2.02, sz + 0.02, sw * 0.9, 0.12, 0.04, 0xffe9b0, 1);
     }
-    ceilingLamp(MB, cx, cz - 1, y0 + h - 0.3, scene, 0xeaf4ff);
-    ceilingLamp(MB, cx, cz + 4, y0 + h - 0.3, scene, 0xeaf4ff);
+
+    // —— 靠墙冷柜（饮料）
+    for (let i = 0; i < 3; i++) {
+      const fx = s.x0 + 2.2 + i * 2.1;
+      MB.box('metal', fx, F + 0.95, s.z0 + 0.55, 1.8, 1.9, 0.7, 0xdde3e8, 2);
+      MB.box('glass', fx, F + 1.1, s.z0 + 0.92, 1.6, 1.6, 0.05, 0xbfe8ff, 2);
+      for (let t2 = 0; t2 < 3; t2++) for (let k = 0; k < 4; k++) {
+        const c = [0x8fd3ff, 0xff8fa3, 0xa3e88f, 0xffd166][(k + t2) % 4];
+        MB.box('plaster', fx - 0.6 + k * 0.4, F + 0.5 + t2 * 0.5, s.z0 + 0.95, 0.26, 0.32, 0.2, c, 1);
+      }
+    }
+
+    // —— 收银台 + 收银机 + 购物篮
+    counter(MB, cx + 5.2, cz + 4.2, 4.2, 1.0, 1.0, 0xcfd6dc);
+    MB.box('metal', cx + 6.0, F + 1.2, cz + 4.2, 0.62, 0.36, 0.5, 0xb9c0c8, 1);
+    MB.box('dark', cx + 6.0, F + 1.5, cz + 4.35, 0.44, 0.24, 0.03, 0x2b3036, 1);
+    for (let i = 0; i < 3; i++) {
+      MB.box('plaster', cx + 3.6, F + 0.18 + i * 0.16, cz + 3.4, 0.5, 0.14, 0.36, [0xd94a5a, 0x33518f, 0x3f8a5a][i], 1);
+    }
+
+    // —— 门口促销台
+    MB.box('wood', cx - 5.0, F + 0.42, cz + 4.6, 2.2, 0.84, 1.1, 0xcbb08a, 2);
+    for (let k = 0; k < 5; k++) {
+      const c = [0xff8fa3, 0xffd166, 0x8fd3ff, 0xa3e88f, 0xffb26b][k];
+      MB.box('plaster', cx - 5.9 + k * 0.45, F + 0.96, cz + 4.6, 0.3, 0.26, 0.32, c, 1);
+    }
+    // 吊牌
+    MB.box('lamp', cx, y0 + h - 0.75, cz - 1.2, 3.2, 0.5, 0.06, 0xffd9a0, 1);
+
+    ceilingLamp(MB, cx, cz - 2, y0 + h - 0.3, scene, 0xeaf4ff);
+    ceilingLamp(MB, cx + 4, cz + 3, y0 + h - 0.3, scene, 0xeaf4ff);
+
     const upperH = 6.2;
     box(MB, 'concrete', cx, y0 + h + upperH / 2, cz, w, upperH, d, 0xd2cec4, 6);
     col(cx, cz, w, d, upperH, y0 + h, 'upper');
     roof(MB, cx, cz, w, d, y0 + h + upperH, 0xcac6bc);
+
     const signMat = new THREE.MeshStandardMaterial({
       map: TEX.sign('便利店', '#66d9ff'), emissiveMap: TEX.sign('便利店', '#66d9ff'),
       emissive: 0xffffff, emissiveIntensity: 0.2, roughness: .5, side: THREE.DoubleSide
@@ -2789,8 +3008,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(7, 1.8), signMat);
     sign.position.set(cx, y0 + 3.4, cz + d / 2 + 0.36);
     scene.add(sign); G.W.signs.push(signMat);
+
     reg({ kind: 'door', x: cx, y: y0 + 1.2, z: cz + d / 2, label: '进入便利店', spawn: { x: cx, z: cz + d / 2 - 2.0 } });
-    reg({ kind: 'shop', x: cx + 6.5, y: y0 + 1.1, z: cz + 3.9, label: '购买热可可（¥12）', price: 12 });
+    reg({ kind: 'shop', x: cx + 5.2, y: y0 + 1.1, z: cz + 4.9, label: '购买热可可（¥12）', item: 'coffee', price: 12 });
+    reg({ kind: 'shop', x: cx - 5.0, y: y0 + 1.0, z: cz + 5.3, label: '买一个甜甜圈（¥8）', item: 'donut', price: 8 });
     info.name = '星光便利店';
   }
 
@@ -5438,7 +5659,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 106;
+  G.BUILD = 202;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
@@ -5729,6 +5950,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         G.Weather.update(dt, P.pos);
         this.time += dt;
         G.W.updateSignals(this.time);
+        G.W.updateDoors(P.pos.x, P.pos.z, dt);
         this.checkHome(dt);
         this.checkEnding(dt);
         this.autoSave(dt);
