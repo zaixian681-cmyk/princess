@@ -1872,7 +1872,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     },
 
     /* ---------- 首层：门洞 + 室内 ---------- */
-    buildGroundFloor(cx, cz, w, d, style, zone, face, topH) {
+    buildGroundFloor(cx, cz, w, d, style, zone, face, topH, opts) {
       const MB = this.MB, H = 4.2, t = 0.46;
       const x0 = cx - w / 2, x1 = cx + w / 2, z0 = cz - d / 2, z1 = cz + d / 2;
       const doorW = 3.0, doorH = 3.1;
@@ -1988,6 +1988,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           const pz = (face === 'e' || face === 'w') ? bz0 + i * 2.4 : bz0;
           MB.box('metal', px, 0.55, pz, 0.18, 0.74, 0.18, 0x8f959c, 1);
         }
+      }
+
+      // 山雨辰小公主大厦：一层做成两个人的家
+      if (opts && opts.home) {
+        this.buildHome(cx, cz, w, d, H, t);
+        return;
       }
 
       // 室内隔断（留 2.4m 通道）
@@ -2162,7 +2168,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     },
 
     /* 单栋建筑 */
-    addBuilding(cx, cz, w, d, floors, style, zone, face) {
+    addBuilding(cx, cz, w, d, floors, style, zone, face, opts) {
       const MB = this.MB;
       const fh = zone === 'cbd' ? 3.9 : 3.3;
       const h = floors * fh;
@@ -2177,7 +2183,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const uvRep = Math.max(2, Math.min(10, Math.round(bodyH / 3.1)));
       MB.box(style, cx, 4.2 + bodyH / 2, cz, w, bodyH, d, tint, uvRep);
       // 首层：真实墙体 + 门洞 + 室内（可自由进入）
-      this.buildGroundFloor(cx, cz, w, d, style, zone, face, h);
+      this.buildGroundFloor(cx, cz, w, d, style, zone, face, h, opts);
       // 转角壁柱（让硬直角有高光和厚度）
       const pilC = ((Math.min(255, ((tint >> 16) & 255) * 1.1) | 0) << 16) |
                    ((Math.min(255, ((tint >> 8) & 255) * 1.1) | 0) << 8) |
@@ -2231,6 +2237,117 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       // 碰撞
       COL.addCenter(cx, 4.2 + (h - 4.2) / 2, cz, w + 0.5, h - 4.2, d + 0.5, 'building');
       return h;
+    },
+
+    /* ---------- 山雨辰小公主大厦：温馨的两个人小家 ---------- */
+    buildHome(cx, cz, w, d, H, t) {
+      const MB = this.MB, FY = 0.22;
+      const x0 = cx - w / 2, x1 = cx + w / 2, z0 = cz - d / 2, z1 = cz + d / 2;
+      const ix0 = x0 + t + 0.4, ix1 = x1 - t - 0.4, iz0 = z0 + t + 0.4, iz1 = z1 - t - 0.4;
+      const col2 = (px, pz, pw, pd, ph, py) => COL.addCenter(px, py + ph / 2, pz, pw, ph, pd, 'furniture');
+      const warm = 0xffe0b8;
+
+      // 木地板 + 地毯
+      MB.box('wood', cx, FY + 0.012, cz, w - 1.0, 0.024, d - 1.0, 0xb98d62, 4);
+      MB.box('plaster', cx - 2.2, FY + 0.032, cz + 2.0, 7.4, 0.02, 5.4, 0xe8c8d2, 4);
+      MB.box('plaster', cx - 2.2, FY + 0.040, cz + 2.0, 6.4, 0.018, 4.4, 0xf0d8de, 4);
+
+      // 客厅：沙发（朝东）+ 茶几 + 两个靠垫
+      MB.box('plaster', cx - 6.4, FY + 0.28, cz + 2.0, 1.0, 0.56, 4.2, 0xa8bcd8, 2);
+      MB.box('plaster', cx - 5.7, FY + 0.55, cz + 2.0, 0.5, 0.9, 4.2, 0x9db2cf, 2);
+      MB.box('plaster', cx - 5.9, FY + 0.62, cz + 0.6, 0.9, 0.2, 0.9, 0xf2b8c8, 2);
+      MB.box('plaster', cx - 5.9, FY + 0.62, cz + 3.4, 0.9, 0.2, 0.9, 0xf2d0a8, 2);
+      col2(cx - 6.2, cz + 2.0, 1.4, 4.4, 0.9, FY);
+      MB.box('wood', cx - 3.4, FY + 0.40, cz + 2.0, 1.5, 0.08, 1.9, 0xb98a5c, 3);
+      MB.box('wood', cx - 3.4, FY + 0.2, cz + 2.0, 0.9, 0.4, 0.9, 0xa8794e, 2);
+      col2(cx - 3.4, cz + 2.0, 1.6, 2.0, 0.46, FY);
+      // 茶几上的杯子与书
+      MB.box('plaster', cx - 3.6, FY + 0.52, cz + 1.5, 0.12, 0.14, 0.12, 0xfaf6ee, 1);
+      MB.box('plaster', cx - 3.1, FY + 0.52, cz + 2.3, 0.12, 0.14, 0.12, 0xfaf6ee, 1);
+      MB.box('wood', cx - 3.3, FY + 0.49, cz + 2.6, 0.3, 0.05, 0.22, 0xc0504e, 1);
+
+      // 电视墙（西侧）
+      MB.box('dark', x0 + t + 0.14, 1.55, cz + 2.0, 0.12, 1.02, 2.1, 0x1e222a, 1);
+      MB.box('plaster', x0 + t + 0.2, 1.55, cz + 2.0, 0.04, 0.88, 1.9, 0x6fa7cc, 1);
+      MB.box('wood', x0 + t + 0.22, FY + 0.32, cz + 2.0, 0.5, 0.64, 3.0, 0x9a7048, 2);
+
+      // 餐桌 + 两把椅子 + 蜡烛（东北角）
+      const tx = cx + 3.0, tz = cz - 4.4;
+      MB.box('wood', tx, FY + 0.74, tz, 2.2, 0.08, 1.2, 0xc79a66, 3);
+      MB.box('wood', tx, FY + 0.37, tz, 0.16, 0.74, 0.16, 0xa8794e, 2);
+      for (const sx of [-1, 1]) {
+        const chx = tx + sx * 1.5;
+        MB.box('wood', chx, FY + 0.44, tz, 0.62, 0.08, 0.62, 0xc79a66, 2);
+        MB.box('wood', chx + sx * 0.28, FY + 0.68, tz, 0.08, 0.56, 0.6, 0xb98a5c, 2);
+        MB.box('wood', chx, FY + 0.22, tz, 0.5, 0.44, 0.5, 0xa8794e, 2);
+        col2(chx, tz, 0.66, 0.66, 0.85, FY);
+        G.Interact && G.Interact.add({ kind: 'sit', x: chx, y: FY + 0.48, z: tz + 0.05, rot: sx > 0 ? -Math.PI / 2 : Math.PI / 2, label: '坐下', seat: { y: 0.45 } });
+      }
+      MB.box('lampIn', tx, FY + 0.92, tz, 0.1, 0.24, 0.1, 0xffe0b0, 1);
+      MB.box('lampIn', tx - 0.5, FY + 0.8, tz + 0.2, 0.16, 0.16, 0.16, 0xfff0d8, 1);
+      MB.box('plaster', tx + 0.55, FY + 0.8, tz - 0.2, 0.16, 0.16, 0.16, 0xfaf6ee, 1);
+      col2(tx, tz, 2.2, 1.2, 0.78, FY);
+
+      // 开放式厨房（南侧墙）
+      MB.box('concrete', cx + 1.4, FY + 0.46, iz1 - 0.6, 6.4, 0.92, 0.9, 0xe4ded2, 3);
+      MB.box('wood', cx + 1.4, FY + 0.95, iz1 - 0.6, 6.5, 0.08, 1.0, 0x6b4a33, 2);
+      col2(cx + 1.4, iz1 - 0.6, 6.4, 0.95, 0.98, FY);
+      MB.box('metal', cx + 3.9, FY + 1.2, iz1 - 0.7, 0.9, 1.9, 0.8, 0xdfe3e8, 2);      // 冰箱
+      col2(cx + 3.9, iz1 - 0.7, 0.9, 0.85, 1.9, FY);
+      MB.box('metal', cx - 0.4, FY + 1.06, iz1 - 0.6, 0.6, 0.1, 0.5, 0xa8b0b8, 1);      // 灶台
+      MB.box('plaster', cx - 1.6, FY + 1.1, iz1 - 0.75, 0.3, 0.26, 0.3, 0xfaf6ee, 1);   // 水壶
+      // 吊柜
+      MB.box('wood', cx + 1.4, 2.86, iz1 - 0.35, 5.2, 0.7, 0.5, 0x8a6242, 2);
+
+      // 卧室角落（西北）：床 + 床头灯 + 毯子
+      const bx = x0 + t + 2.4, bz = z0 + t + 2.6;
+      MB.box('wood', bx, FY + 0.18, bz, 2.4, 0.34, 3.0, 0xb08a5f, 3);
+      MB.box('plaster', bx, FY + 0.44, bz, 2.3, 0.22, 2.9, 0xfdf8f2, 3);
+      MB.box('plaster', bx - 0.1, FY + 0.6, bz - 1.0, 2.1, 0.18, 0.7, 0xffffff, 2);     // 枕头
+      MB.box('plaster', bx + 0.1, FY + 0.56, bz + 0.5, 2.2, 0.16, 1.7, 0xe8c8d2, 3);   // 被子
+      MB.box('wood', bx, FY + 0.78, bz - 1.62, 2.5, 1.0, 0.16, 0x9a7048, 2);           // 床头板
+      col2(bx, bz, 2.5, 3.1, 0.75, FY);
+      MB.box('wood', bx + 1.5, FY + 0.5, bz - 1.4, 0.5, 0.5, 0.5, 0xa8794e, 2);        // 床头柜
+      MB.box('lampIn', bx + 1.5, FY + 0.86, bz - 1.4, 0.22, 0.26, 0.22, 0xffe0b0, 1);
+
+      // 书架 + 绿植 + 落地灯
+      MB.box('wood', x1 - t - 0.55, FY + 1.0, cz - 1.0, 0.55, 2.0, 3.2, 0x8a6242, 2);
+      for (let k = 1; k <= 3; k++) {
+        MB.box('wood', x1 - t - 0.5, FY + k * 0.55, cz - 1.0, 0.5, 0.05, 3.0, 0xb08a5f, 1);
+        for (let b2 = 0; b2 < 8; b2++) {
+          const c = [0xc0504e, 0x4e7ec0, 0xd8a24a, 0x4f8a66, 0x8a6cc0][(b2 + k) % 5];
+          MB.box('plaster', x1 - t - 0.5, FY + k * 0.55 + 0.16, cz - 2.2 + b2 * 0.34, 0.34, 0.26, 0.08, c, 1);
+        }
+      }
+      col2(x1 - t - 0.55, cz - 1.0, 0.6, 3.2, 2.0, FY);
+      for (const [px, pz] of [[ix0 + 0.7, iz1 - 0.8], [ix1 - 0.8, iz0 + 0.9]]) {
+        MB.box('concrete', px, FY + 0.24, pz, 0.46, 0.48, 0.46, 0xd8d2c4, 1);
+        MB.box('leaf', px, FY + 0.8, pz, 0.8, 0.9, 0.8, 0x4f8a44, 2);
+      }
+      MB.box('metal', ix0 + 0.6, FY + 0.03, cz + 5.2, 0.4, 0.06, 0.4, 0x8f959d, 1);
+      MB.box('metal', ix0 + 0.6, FY + 0.72, cz + 5.2, 0.09, 1.38, 0.09, 0x9aa0a8, 1);
+      MB.box('lampIn', ix0 + 0.6, FY + 1.46, cz + 5.2, 0.46, 0.3, 0.46, 0xffe0b0, 1);
+
+      // 墙上的照片墙
+      for (let i = 0; i < 4; i++) {
+        const px = cx - 4.0 + i * 1.5, py = 2.1 + (i % 2) * 0.5;
+        MB.box('wood', px, py, z0 + t + 0.1, 1.1, 0.8, 0.07, 0x8a6242, 1);
+        MB.box('plaster', px, py, z0 + t + 0.15, 0.95, 0.66, 0.03, [0xe8c8d2, 0xcfe0ee, 0xf2d8b8, 0xd8e8cf][i], 1);
+      }
+      // 暖色顶灯带
+      MB.box('lampIn', cx, H - 0.22, cz, w - 3.0, 0.1, 0.5, warm, 1);
+      MB.box('lampIn', cx - 4.5, H - 0.22, cz + 4.0, 2.4, 0.1, 0.4, warm, 1);
+
+      // 互动：家里的留言 + 门口的牌子
+      G.Interact && G.Interact.add({
+        kind: 'note', x: tx, y: FY + 1.15, z: tz + 0.6, label: '看看餐桌上的纸条', title: '餐桌上的纸条',
+        msg: '「今天也辛苦啦。锅里温着汤，茶几上有你爱吃的糖。\n这个家只有两把钥匙——一把在我这儿，一把给你。」'
+      });
+      G.Interact && G.Interact.add({
+        kind: 'sit', x: cx - 4.6, y: FY + 0.45, z: cz + 2.0, rot: Math.PI / 2, label: '在沙发上坐一会儿', seat: { y: 0.42 }
+      });
+      this.homeRect = { x0, x1, z0, z1 };
+      G.Private = this.homeRect;   // 别人不许进来
     },
 
     /* ---------- 街道装饰 ---------- */
@@ -2539,7 +2656,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         this.addPlanter(cx + Math.cos(a) * 8, cz + Math.sin(a) * 8);
       }
       // 广场地标塔（西北角）
-      this.addBuilding(cx - 16, cz - 16, 18, 18, 6, 'glass', 'cbd', 's');
+      this.addBuilding(cx - 16, cz - 16, 18, 18, 6, 'glass', 'cbd', 's', { home: true });
       // 塔楼入口
       MB.box('glass', cx - 16, 2.0, cz - 16 + 9.2, 6.0, 3.2, 0.2, 0xbfe3f0, 4);
       MB.box('metal', cx - 16, 3.8, cz - 16 + 9.9, 7.4, 0.24, 1.8, 0xb9c0c8, 2);
@@ -7578,6 +7695,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     },
 
     addNPC(scene, x, z, yaw, name, color, lines) {
+      // 山雨辰小公主大厦是两个人的家：别的 NPC 一律不进
+      const priv = G.Private || (this.homeRect);
+      if (priv && x > priv.x0 - 1.5 && x < priv.x1 + 1.5 && z > priv.z0 - 1.5 && z < priv.z1 + 1.5) {
+        x = priv.x1 + 4;
+        z = (priv.z0 + priv.z1) / 2;
+      }
       const g = new THREE.Group();
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.64, 0.26),
         new THREE.MeshStandardMaterial({ color, roughness: 0.8 }));
