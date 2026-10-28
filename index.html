@@ -533,7 +533,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     draw(ctx, size);
     const t = new THREE.CanvasTexture(c);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 4;
+    t.anisotropy = 8;   // 斜着看墙/地面时不再糊成一片
     if (opts && opts.srgb !== false) t.colorSpace = THREE.SRGBColorSpace;
     if (opts && opts.nearest) { t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestMipmapLinearFilter; }
     cache[name] = t;
@@ -541,6 +541,34 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   }
 
   const T = {};
+
+  // 程序化法线贴图（低频噪声求梯度）：给墙面/砖/木头一点真实的起伏
+  T.noiseNormal = () => tex('noiseNrm', 256, (ctx, s) => {
+    const g = new Float32Array(s * s), tmp = new Float32Array(s * s);
+    for (let i = 0; i < s * s; i++) g[i] = Math.random();
+    for (let pass = 0; pass < 2; pass++) {
+      for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+        let sum = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          sum += g[((y + dy + s) % s) * s + ((x + dx + s) % s)];
+        }
+        tmp[y * s + x] = sum / 9;
+      }
+      g.set(tmp);
+    }
+    const img = ctx.createImageData(s, s);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const i = y * s + x;
+      const dx = (g[y * s + ((x + 1) % s)] - g[y * s + ((x - 1 + s) % s)]) * 7;
+      const dy = (g[((y + 1) % s) * s + x] - g[((y - 1 + s) % s) * s + x]) * 7;
+      const len = Math.sqrt(dx * dx + dy * dy + 1);
+      img.data[i * 4] = Math.floor((-dx / len * 0.5 + 0.5) * 255);
+      img.data[i * 4 + 1] = Math.floor((-dy / len * 0.5 + 0.5) * 255);
+      img.data[i * 4 + 2] = Math.floor((1 / len * 0.5 + 0.5) * 255);
+      img.data[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  }, { srgb: false });
 
   T.asphalt = () => tex('asphalt', 256, (ctx, s) => {
     ctx.fillStyle = '#2c2e33'; ctx.fillRect(0, 0, s, s);
@@ -655,7 +683,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     noise(ctx, s, 12);
   });
 
-  T.wood = () => tex('wood', 256, (ctx, s) => {
+  T.wood = () => tex('wood', 512, (ctx, s) => {
     ctx.fillStyle = '#8a6242'; ctx.fillRect(0, 0, s, s);
     for (let y = 0; y < s; y += 32) {
       ctx.fillStyle = `rgba(${120 + Math.random() * 30},${80 + Math.random() * 20},${50 + Math.random() * 15},.85)`;
@@ -669,12 +697,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     }
   });
 
-  T.plaster = () => tex('plaster', 256, (ctx, s) => {
+  T.plaster = () => tex('plaster', 512, (ctx, s) => {
     ctx.fillStyle = '#efe9df'; ctx.fillRect(0, 0, s, s);
     noise(ctx, s, 10);
   });
 
-  T.tileWall = () => tex('tileWall', 256, (ctx, s) => {
+  T.tileWall = () => tex('tileWall', 512, (ctx, s) => {
     ctx.fillStyle = '#dfe4e6'; ctx.fillRect(0, 0, s, s);
     const u = s / 8;
     for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
@@ -1013,16 +1041,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       this.clock = new THREE.Clock();
 
       // 光照
-      this.hemi = new THREE.HemisphereLight(0xdfefff, 0x4a4a52, 0.35);
+      this.hemi = new THREE.HemisphereLight(0xdcecff, 0x55504c, 0.44);
       this.scene.add(this.hemi);
-      this.sun = new THREE.DirectionalLight(0xfff2dc, 1.45);
+      this.sun = new THREE.DirectionalLight(0xffeed2, 1.32);
       this.sun.castShadow = true;
       this.sun.shadow.mapSize.set(2048, 2048);
       const sc = this.sun.shadow.camera;
       sc.left = -58; sc.right = 58; sc.top = 58; sc.bottom = -58; sc.near = 1; sc.far = 320;
       this.sun.shadow.bias = -0.0008;
       this.sun.shadow.normalBias = 0.045;
-      this.sun.shadow.radius = 2.2;
+      this.sun.shadow.radius = 3.0;
       this.scene.add(this.sun);
       this.sun.target.position.set(0, 0, 0);
       this.scene.add(this.sun.target);
@@ -1684,7 +1712,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       switch (key) {
         case 'asphalt': return new S({ map: TEX.asphalt(), roughness: 0.94, metalness: 0.02, vertexColors: true });
         case 'paving': return new S({ map: TEX.paving(), roughness: 0.82, metalness: 0.02, vertexColors: true });
-        case 'concrete': return new S({ map: TEX.concrete(), roughness: 0.86, vertexColors: true });
+        case 'concrete': return new S({ map: TEX.concrete(), roughness: 0.86, vertexColors: true,
+          normalMap: TEX.noiseNormal(), normalScale: new THREE.Vector2(0.18, 0.18) });
         case 'glass': return new S({
           map: TEX.glass(), emissiveMap: TEX.glassNight(), emissive: 0xfff0d0,
           roughness: 0.20, metalness: 0.46, vertexColors: true, emissiveIntensity: 0, envMapIntensity: 1.7
@@ -1693,10 +1722,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           map: TEX.modern(), emissiveMap: TEX.glassNight(), emissive: 0xffe7bb,
           roughness: 0.34, metalness: 0.34, vertexColors: true, emissiveIntensity: 0, envMapIntensity: 1.25
         });
-        case 'brick': return new S({ map: TEX.brick(), roughness: 0.9, vertexColors: true });
+        case 'brick': return new S({ map: TEX.brick(), roughness: 0.9, vertexColors: true,
+          normalMap: TEX.noiseNormal(), normalScale: new THREE.Vector2(0.4, 0.4) });
         case 'grass': return new S({ map: TEX.grass(), roughness: 1, vertexColors: true });
-        case 'wood': return new S({ map: TEX.wood(), roughness: 0.72, vertexColors: true });
-        case 'plaster': return new S({ map: TEX.plaster(), roughness: 0.9, vertexColors: true });
+        case 'wood': return new S({ map: TEX.wood(), roughness: 0.72, vertexColors: true,
+          normalMap: TEX.noiseNormal(), normalScale: new THREE.Vector2(0.22, 0.22) });
+        case 'plaster': return new S({ map: TEX.plaster(), roughness: 0.9, vertexColors: true,
+          normalMap: TEX.noiseNormal(), normalScale: new THREE.Vector2(0.26, 0.26) });
         case 'tile': return new S({ map: TEX.tileWall(), roughness: 0.55, metalness: 0.05, vertexColors: true });
         case 'metal': return new S({ color: 0xa8adb4, roughness: 0.34, metalness: 0.78, vertexColors: true });
         case 'dark': return new S({ color: 0x2a2c31, roughness: 0.62, metalness: 0.2, vertexColors: true });
@@ -2337,6 +2369,43 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       // 暖色顶灯带
       MB.box('lampIn', cx, H - 0.22, cz, w - 3.0, 0.1, 0.5, warm, 1);
       MB.box('lampIn', cx - 4.5, H - 0.22, cz + 4.0, 2.4, 0.1, 0.4, warm, 1);
+
+      // —— 软装：窗帘、挂钟、冰箱贴、鞋柜、水槽、杯架、晾衣杆、猫窝
+      // 窗帘（东南与西南两面墙内侧）
+      for (const [wx, wz, horiz] of [[cx + 5.4, iz1 - 0.25, true], [cx + 7.6, iz1 - 0.25, true]]) {
+        MB.box('plaster', wx, 2.35, wz, 1.5, 2.3, 0.12, 0xf2e6d8, 2);
+        MB.box('plaster', wx, 1.2, wz + 0.02, 1.5, 0.1, 0.16, 0xe0cdb8, 1);
+      }
+      MB.box('metal', cx + 6.5, 3.52, iz1 - 0.25, 3.4, 0.06, 0.06, 0xb0a89c, 1);   // 窗帘杆
+      // 挂钟（东墙）
+      MB.box('wood', x1 - t - 0.12, 2.5, cz + 3.6, 0.08, 0.62, 0.62, 0x8a6242, 1);
+      MB.box('plaster', x1 - t - 0.18, 2.5, cz + 3.6, 0.04, 0.52, 0.52, 0xfaf6ee, 1);
+      MB.box('dark', x1 - t - 0.22, 2.52, cz + 3.6, 0.02, 0.24, 0.03, 0x2a2d33, 1);
+      MB.box('dark', x1 - t - 0.22, 2.52, cz + 3.6, 0.02, 0.03, 0.18, 0x2a2d33, 1);
+      // 冰箱贴
+      for (let i = 0; i < 5; i++) {
+        MB.box('plaster', cx + 3.9 + (i % 2 ? 0.2 : -0.2), 1.6 + (i | 0) * 0.12, iz1 - 0.68,
+          0.09, 0.09, 0.03, [0xff8fa3, 0xffd166, 0x8fd3ff, 0xa3e88f, 0xd8a3ff][i], 1);
+      }
+      // 水槽 + 龙头 + 沥水架
+      MB.box('metal', cx - 1.9, FY + 0.98, iz1 - 0.62, 1.0, 0.06, 0.6, 0xb9c0c8, 1);
+      MB.box('metal', cx - 1.9, FY + 1.12, iz1 - 0.85, 0.08, 0.3, 0.08, 0xa8b0b8, 1);
+      MB.box('metal', cx - 0.9, FY + 1.05, iz1 - 0.62, 0.5, 0.1, 0.4, 0xa8b0b8, 1);
+      // 鞋柜 + 门口地垫（靠门那面墙）
+      MB.box('wood', cx + 1.0, FY + 0.3, iz1 - 1.5, 2.2, 0.6, 0.42, 0x8a6242, 2);
+      MB.box('plaster', cx + 1.0, FY + 0.02, iz1 - 2.2, 2.4, 0.03, 1.0, 0xc98a96, 2);
+      for (let i = 0; i < 3; i++) MB.box('plaster', cx + 0.3 + i * 0.6, FY + 0.09, iz1 - 1.5, 0.22, 0.14, 0.34, 0x8b7b6b, 1);
+      // 杯架（吊柜下方）
+      for (let i = 0; i < 4; i++) {
+        MB.box('plaster', cx + 0.2 + i * 0.5, FY + 1.62, iz1 - 0.42, 0.1, 0.14, 0.1, 0xfaf6ee, 1);
+      }
+      // 晾衣杆 + 两件衣服（西北角上方）
+      MB.box('metal', bx + 2.6, 2.9, bz + 0.6, 0.06, 0.06, 3.2, 0xb0a89c, 1);
+      MB.box('plaster', bx + 2.6, 2.5, bz - 0.4, 0.06, 0.8, 0.5, 0xe8c8d2, 2);
+      MB.box('plaster', bx + 2.6, 2.55, bz + 0.9, 0.06, 0.7, 0.46, 0xcfe0ee, 2);
+      // 猫窝（沙发旁）
+      MB.box('plaster', cx - 5.0, FY + 0.14, cz + 5.4, 0.8, 0.28, 0.8, 0xd8bcc8, 2);
+      MB.box('plaster', cx - 5.0, FY + 0.2, cz + 5.4, 0.6, 0.12, 0.6, 0xf0e0e6, 1);
 
       // 互动：家里的留言 + 门口的牌子
       G.Interact && G.Interact.add({
@@ -4760,6 +4829,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         else if (t < 0.5) { const u = (t - 0.25) * 4; x = p.cx + h; z = p.cz + h - u * 2 * h; yaw = Math.PI; }
         else if (t < 0.75) { const u = (t - 0.5) * 4; x = p.cx + h - u * 2 * h; z = p.cz - h; yaw = -Math.PI / 2; }
         else { const u = (t - 0.75) * 4; x = p.cx - h; z = p.cz - h + u * 2 * h; yaw = 0; }
+        // 不许穿墙、也不许进屋（家是私有区域）
+        const priv = G.Private;
+        const inHome = priv && x > priv.x0 - 0.6 && x < priv.x1 + 0.6 && z > priv.z0 - 0.6 && z < priv.z1 + 0.6;
+        if (G.COL.pointSolid(x, 0.9, z) || inHome) {
+          x = p.g.position.x; z = p.g.position.z;      // 原地不动，等人绕开
+          p.cur = 0;
+        }
         p.g.position.set(x, 0.18, z);
         // 朝向平滑（拐角不再瞬间转 90°），并产生侧倾
         let dy = yaw - p.yaw;
@@ -4989,8 +5065,24 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
       car.speed = G.damp(car.speed, Math.max(0, targetSpeed), 2.2, dt);
       const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw);
-      car.x += fx * car.speed * dt;
-      car.z += fz * car.speed * dt;
+      const nx3 = car.x + fx * car.speed * dt;
+      const nz3 = car.z + fz * car.speed * dt;
+      // 碰撞检测：目标点若在实体里（楼体/墙），就停在原地并重新找路，绝不穿模
+      const solid = G.COL.pointSolid(nx3, 0.8, nz3) || G.COL.pointSolid(nx3 + fx * 1.6, 0.8, nz3 + fz * 1.6);
+      if (solid) {
+        car.speed *= 0.25;
+        car.nextNode = null;
+        car.stuck = (car.stuck || 0) + dt;
+        if (car.stuck > 1.2) {          // 卡太久就原地掉头
+          car.yaw += Math.PI;
+          car.stuck = 0;
+          car.dir = [-car.dir[0], -car.dir[1]];
+        }
+      } else {
+        car.stuck = 0;
+        car.x = nx3;
+        car.z = nz3;
+      }
       // 简单避让边界
       if (Math.abs(car.x) > 210 || car.z > 205 || car.z < -210) {
         car.yaw += Math.PI;
@@ -7424,7 +7516,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 255;
+  G.BUILD = 258;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
