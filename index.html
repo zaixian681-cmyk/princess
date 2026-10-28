@@ -3021,10 +3021,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     box(MB, key, (x0 + x1) / 2, yTop - t / 2, (z0 + z1) / 2, x1 - x0, t, z1 - z0, color, 4);
     col((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, t, yTop - t, 'floor');
   }
-  // 带洞的楼板
+  // 带洞的楼板（支持多块洞，洞不会被拼到楼外去）
   function slabHole(MB, x0, z0, x1, z1, yTop, t, key, color, hole) {
     if (!hole) return slab(MB, x0, z0, x1, z1, yTop, t, key, color);
-    const { hx0, hz0, hx1, hz1 } = hole;
+    if (Array.isArray(hole)) {
+      for (const h of hole) slabHole(MB, x0, z0, x1, z1, yTop, t, key, color, h);
+      return;
+    }
+    // 洞必须在楼板范围内，否则拼出来的板块会漏到楼外（不能直接改 const 解构出来的值）
+    const hx0 = Math.max(x0, hole.hx0), hx1 = Math.min(x1, hole.hx1);
+    const hz0 = Math.max(z0, hole.hz0), hz1 = Math.min(z1, hole.hz1);
+    if (hx1 <= hx0 || hz1 <= hz0) return slab(MB, x0, z0, x1, z1, yTop, t, key, color);
     slab(MB, x0, z0, hx1, hz0, yTop, t, key, color);
     slab(MB, hx1, z0, x1, hz1, yTop, t, key, color);
     slab(MB, hx0, hz1, x1, z1, yTop, t, key, color);
@@ -3725,18 +3732,33 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     for (let i = 0; i < 5; i++) {
       box(MB, 'paint', x0 + 4 + i * 4.0, y0 + 0.02, cz - 5, 0.12, 0.02, 5.0, 0xf0f0e8);
     }
-    // 二层平台 + 坡道
-    slab(MB, x0, z0, x1, cz + 2, y0 + h, 0.3, 'concrete', 0x9c988f);
-    for (let x = x0 + 4; x < x1 - 2; x += 10) box(MB, 'concrete', x, y0 + h / 2, cz + 7, 0.7, h, 0.7, 0xbdb9b0);
-    // 坡道
-    for (let i = 0; i < 14; i++) {
-      const t = i / 13;
-      box(MB, 'concrete', x1 - 5.5, y0 + t * h * 0.72, cz + 6 + i * 0.85, 5.0, 0.28, 0.9, 0xa8a49c);
+    // 二层平台：只铺外圈（中间留两个车位大的洞），洞下方柱子只立到二层底
+    slabHole(MB, x0, z0, x1, cz + 2, y0 + h, 0.3, 'concrete', 0x9c988f,
+      [{ hx0: cx - 4.5, hz0: cz - 3.5, hx1: cx + 4.5, hz1: cz + 0.5 }]);
+    for (let x = x0 + 3; x < x1 - 2; x += 6.3) box(MB, 'concrete', x, y0 + h / 2, cz + 7, 0.7, h, 0.7, 0xbdb9b0);
+
+    // 坡道：沿 X 方向从东往西爬升，接上二层平台东侧
+    const rampH = h, rampHalf = 2.0, rampHalfD = 1.6, rampLen = 16;
+    for (let i = 0; i <= 16; i++) {
+      const t = i / 16;
+      const rx = x1 - 1.0 - (1 - t) * rampLen;          // 从东端往西爬
+      const ry = y0 + t * rampH;
+      box(MB, 'concrete', rx, ry - 0.14, cz + 4.2, rampLen / 16 + 0.05, 0.28, 3.2, 0xa8a49c);
+      col(rx, cz + 4.2, rampLen / 16 + 0.06, 3.2, t * rampH + 0.28, y0, 'stair');
+    }
+    for (let i = 0; i <= 4; i++) {                       // 坡道两侧矮墙
+      const t = i / 4;
+      const rx = x1 - 1.0 - (1 - t) * rampLen;
+      box(MB, 'concrete', rx, y0 + t * rampH + 0.45, cz + 5.7, rampLen / 4 + 0.05, 0.9, 0.24, 0xb0aca3);
     }
     ceilingLamp(MB, cx - 6, cz, y0 + h - 0.3, scene, 0xfff2d8);
     ceilingLamp(MB, cx + 5, cz + 2, y0 + h - 0.3, scene, 0xfff2d8);
     // 顶层
     slab(MB, x0, z0, x1, z1, y0 + h * 2, 0.3, 'concrete', 0x9c988f);
+    // 楼顶女儿墙一圈，防止"一块板飘着"
+    for (const [px, pz, pw, pd] of [[cx, z0, w, 0.3], [cx, z1, w, 0.3], [x0, cz, 0.3, d], [x1, cz, 0.3, d]]) {
+      box(MB, 'concrete', px, y0 + h * 2 + 0.55, pz, pw, 0.5, pd, 0xb8b4ab);
+    }
     box(MB, 'concrete', cx, y0 + h * 2 + 0.7, z1, w, 1.0, 0.3, 0xb8b4ab);
     clutter(MB, x0 + 1, z0 + 1, x1 - 1, z1 - 1, FLOOR, 10);
     info.top = y0 + h + 4.0;
@@ -7285,7 +7307,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 250;
+  G.BUILD = 251;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
