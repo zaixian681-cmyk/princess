@@ -1619,11 +1619,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       this.scene = scene;
       this.MB = new G.MeshBuilder();
       COL.clear();
-      this.buildBase();
-      this.buildRoads();
-      this.buildBlocks();
-      this.buildWaterfront();
-      this.finish();
+      // 分阶段容错：某一段出错只丢那一段，不会把整座城一起带走
+      const stage = (name, fn) => {
+        try { fn.call(this); }
+        catch (e) {
+          (window.__errs = window.__errs || []).push('[world] ' + name + ': ' + ((e && e.message) || e));
+          console.error('[world]', name, e);
+        }
+      };
+      stage('base', this.buildBase);
+      stage('roads', this.buildRoads);
+      stage('blocks', this.buildBlocks);
+      stage('waterfront', this.buildWaterfront);
+      stage('finish', this.finish);
       return this;
     },
 
@@ -3137,13 +3145,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   I.build = function (type, cx, cz, r, world) {
     const MB = world.MB, scene = world.scene;
     const info = { type, cx, cz, door: { x: cx, z: 0 }, inside: null, lights: [] };
-    switch (type) {
+    try { switch (type) {
       case 'cafe': buildCafe(MB, scene, cx, cz, info); break;
       case 'store': buildStore(MB, scene, cx, cz, info); break;
       case 'apartment': buildApartment(MB, scene, cx, cz, info); break;
       case 'office': buildOffice(MB, scene, cx, cz, info); break;
       case 'princess': buildPrincess(MB, scene, cx, cz, info); break;
       case 'garage': buildGarage(MB, scene, cx, cz, info); break;
+    } }
+    catch (e) {
+      (window.__errs = window.__errs || []).push('[interior] ' + type + ': ' + ((e && e.message) || e));
+      console.error('[interior]', type, e);
     }
     info.inside = (x, z) => x > info.x0 && x < info.x1 && z > info.z0 && z < info.z1;
     if (G.W && G.W.footprints) G.W.footprints.push({ x0: info.x0, x1: info.x1, z0: info.z0, z1: info.z1, top: info.top || 14 });
@@ -7076,7 +7088,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 241;
+  G.BUILD = 242;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
@@ -7084,6 +7096,27 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     boot() {
       const canvas = document.getElementById('gl');
       // 逐个初始化并容错：任何一个模块加载失败，也不至于整局打不开
+      // 出错提示条：手机上也能直接看到并截图
+      const showErrBar = () => {
+        const list = (window.__errs || []).filter(Boolean);
+        if (!list.length) return;
+        let el = document.getElementById('errBar');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'errBar';
+          el.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:9999;background:rgba(150,20,40,.94);' +
+            'color:#fff;font:12px/1.5 monospace;padding:8px 10px;white-space:pre-wrap;max-height:38%;overflow:auto;' +
+            'border-bottom:2px solid #ff9dc4;';
+          el.addEventListener('click', () => el.remove());
+          document.body.appendChild(el);
+        }
+        el.textContent = '脚本报错（点一下关闭，请把这段发给开发者）  BUILD ' + (G.BUILD || '?') + '\n' + list.slice(0, 4).join('\n');
+      };
+      window.__showErrBar = showErrBar;
+      setTimeout(showErrBar, 1500);
+      addEventListener('error', () => setTimeout(showErrBar, 60));
+      addEventListener('unhandledrejection', () => setTimeout(showErrBar, 60));
+
       const safe = (name, fn) => {
         try { fn(); } catch (e) {
           (window.__errs = window.__errs || []).push('[init] ' + name + ': ' + (e && e.message || e));
