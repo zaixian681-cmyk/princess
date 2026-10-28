@@ -6498,9 +6498,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
     update(dt) {
       this.t += dt;
-      if (this.t < 0.5) return;
+      if (this.t < 0.2) return;
       this.t = 0;
       const st = this.cur();
+      this.updateHud();          // 距离随走随变（以前只在推进阶段时刷新，所以数字是死的）
       if (!st || this.stage >= this.steps.length) return;
       // 目标光柱：立在当前目标点上方，轻轻呼吸
       if (!this.beacon) this.initBeacon();
@@ -6537,7 +6538,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const tg = this.target();
         if (tg && G.Player) {
           const d = Math.hypot(G.Player.pos.x - tg.x, G.Player.pos.z - tg.z);
-          dist = ' · ' + (d > 999 ? (d / 1000).toFixed(1) + 'km' : Math.round(d) + 'm');
+          if (d < 6) dist = ' · 已到达';
+          else if (d < 20) dist = ' · ' + Math.round(d) + 'm（就在附近）';
+          else dist = ' · ' + (d > 999 ? (d / 1000).toFixed(1) + 'km' : Math.round(d) + 'm');
         }
       } catch (e) {}
       el.textContent = '主线 ' + (this.stage + 1) + '/5 · ' + st.goal + dist;
@@ -7209,7 +7212,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 246;
+  G.BUILD = 247;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
