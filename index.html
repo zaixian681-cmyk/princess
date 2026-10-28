@@ -2723,10 +2723,35 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       this.treeCanopies = inst;
     },
 
+    /* 出生点旁边那栋楼立上招牌 */
+    spawnTowerSign() {
+      if (!G.roofSign || !this.doors || !this.doors.length) return null;
+      const sp = this.spawn || { x: -33, z: -16 };
+      // 玩家出生时朝 +Z，就选"出生点正前方/身后"最近的那栋楼挂招牌
+      const aimX = sp.x, aimZ = sp.z + 30;
+      const rectDist = (f, x, z) => Math.hypot(
+        Math.max(f.x0 - x, 0, x - f.x1), Math.max(f.z0 - z, 0, z - f.z1));
+      let fp = null, bd = 1e9;
+      for (const f of this.footprints) {
+        if ((f.top || 0) < 6) continue;
+        const d = rectDist(f, aimX, aimZ);
+        if (d < bd) { bd = d; fp = f; }
+      }
+      if (!fp) return null;
+      const cx = (fp.x0 + fp.x1) / 2, cz = (fp.z0 + fp.z1) / 2;
+      const top = fp.top || 14;
+      // 招牌朝出生点
+      const rotY = Math.atan2(sp.x - cx, sp.z - cz);
+      G.roofSign(this.scene, cx, top, cz, '山雨辰小公主大厦',
+        { w: Math.min(19, (fp.x1 - fp.x0) * 0.92), h: 3.2, stand: 1.4, rotY, glow: 1.5 });
+      return { x: Math.round(cx), z: Math.round(cz), top, dist: Math.round(bd) };
+    },
+
     finish() {
       const scene = this.scene;
       this.groundDetail();
       this.buildTreeCanopies();
+      this.spawnSignInfo = this.spawnTowerSign();
       const mats = {};
       const meshes = this.MB.build((key) => {
         mats[key] = mats[key] || this.material(key);
@@ -2879,6 +2904,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   const FLOOR = 0.2;          // 室内地面高度
   const WALK = 0.18;
 
+  G.roofSign = roofSign;
   const I = G.Interiors = { list: [] };
 
   function reg(o) { if (G.Interact) G.Interact.add(o); return o; }
@@ -3353,6 +3379,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
     const gpr = new THREE.Group();
     gpr.position.set(x, y, z);
+    if (opts.rotY) gpr.rotation.y = opts.rotY;
     // 背面灯箱
     const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.5, hh + 0.42, 0.34),
       new THREE.MeshStandardMaterial({ color: 0x2a2730, roughness: .55, metalness: .45 }));
@@ -3365,8 +3392,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         roughness: .5, metalness: .05, toneMapped: false
       }));
     face.position.set(0, stand + hh / 2, 0.19);
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(w, hh),
-      new THREE.MeshStandardMaterial({ color: 0x241f28, roughness: .8 }));
+    // 背面也贴同样的字，绕着走也能看到
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(w, hh), face.material.clone());
     back.position.set(0, stand + hh / 2, -0.19); back.rotation.y = Math.PI;
     gpr.add(frame, face, back);
     // 支架
@@ -6841,7 +6868,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   'use strict';
   const THREE = global.THREE, G = global.G, IN = G.IN;
 
-  G.BUILD = 229;
+  G.BUILD = 230;
 
   const Game = G.Game = {
     running: false, time: 0, frameCount: 0, fpsAcc: 0, fpsFrames: 0, lastFpsCheck: 0,
